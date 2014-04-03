@@ -49,6 +49,12 @@ def preprocess():
 	func_bet.inputs.robust = True
 	func_bet.inputs.vertical_gradient = 0
 	
+	sfunc_bet = pe.Node(interface=fsl.BET(), name="func_mask")
+	sfunc_bet.inputs.mask = True
+	sfunc_bet.inputs.frac = 0.5
+	sfunc_bet.inputs.robust = True
+	sfunc_bet.inputs.vertical_gradient = 0
+	
 	struct_bet = pe.Node(interface=fsl.BET(), name="struct_bet")
 	struct_bet.inputs.mask = True
 	struct_bet.inputs.frac = 0.5
@@ -106,9 +112,6 @@ def preprocess():
                      (realign,func_bet,[('mean_image','in_file')]), 
 					 (inputnode,struct_bet,[('struct','in_file')]),
 					 
-					 #(struct_bet,coregister,[('out_file','source')]),
-					 #(func_bet,coregister,[('out_file','target')]),
-					 
 					 (struct_bet,coregister,[('out_file','reference')]),
 					 (func_bet,coregister,[('out_file','in_file')]),
 					 
@@ -116,21 +119,16 @@ def preprocess():
 					 (realign,coreg_xfm,[('realigned_files','in_file')]),
 					 (struct_bet,coreg_xfm,[('out_file','reference')]),
 					 
-					 #(realign,coregister,[('realigned_files','apply_to_files')]),
-					 
-					 #(coregister,flirt,[('coregistered_source','in_file')]),
 					 (struct_bet,flirt,[('out_file','in_file')]),
-		             #(struct_bet,flirt,[('out_file','in_file')]),
-		             #(realign,xfm,[('realigned_files','in_file')]),
 		             (coreg_xfm,xfm,[('out_file','in_file')]),
 		             (flirt,xfm,[('out_matrix_file','in_matrix_file')]),
 		             
 		             (xfm,despike,[('out_file','in_file')]),
 		             (despike,susan, [('out_file', 'in_file')]), 
 		             (despike,outputnode, [('out_file', 'ufunc')]), 
-		             #(xfm, susan, [('out_file', 'in_file')]), 
 		             (susan,outputnode,[('smoothed_file','func')]),
-		             (func_bet,outputnode,[('mask_file','mask')]),
+		             (susan,sfunc_bet,[('smoothed_file','in_file')]),
+		             (sfunc_bet,outputnode,[('mask_file','mask')]),
 		             (realign,outputnode,[('realignment_parameters','movement')])
 		             ])
 	return preproc
@@ -149,10 +147,11 @@ def eprime2dm(eprime, pppi):
 	sequence = m.group(1)
     
 	mlab.MatlabCommand.set_default_matlab_cmd("matlab -nodesktop -nosplash")
-
+	
 	# execute matlab script
 	m = mlab.MatlabCommand()
-	m.inputs.script = sequence+"_eprime2dm(\'"+eprime+"\')"
+	m.inputs.mfile = False
+	m.inputs.script = sequence+"_eprime2dm(\'"+eprime+"\');"
 	m.run();
 
 	# extract variables from .mat files
@@ -238,6 +237,7 @@ def level1analysis(pppi):
 	name = 'level1'
 	if pppi:
 		name = "level1_pppi"
+	
 	
 	l1analysis = pe.Workflow(name=name)
 	inputnode = pe.Node(interface=util.IdentityInterface(
@@ -353,6 +353,7 @@ def task(directory,sequence):
 	if not os.path.exists(base_dir):
 		os.makedirs(base_dir)
 	subject = get_subject(directory)
+
 		
 	# get components
 	ds = datasource(directory,sequence)
@@ -531,9 +532,12 @@ def resting(directory,sequence):
 	ds = datasource(directory,sequence)
 	pp = preprocess()
 	nu = pe.Node(interface=wrap.Nuisance(), name="nuisance")
+	nu.inputs.white_mask = ROI_dir+"white_test3.nii"
 	glm = pe.Node(interface=fsl.GLM(), name="glm")
+	glm.inputs.out_res_name = "residual.4d.nii"
 	filt = pe.Node(interface=fsl.ImageMaths(), name="filter")
-	filt.op_string = ' -bptf 128 12.5 '
+	filt.inputs.op_string = ' -bptf 128 12.5 '
+	filt.inputs.terminal_output = 'none'
 	
 	alff = CPAC.alff.create_alff(wf_name='alff')
 	alff.inputs.hp_input.hp = 0.01
@@ -549,7 +553,7 @@ def resting(directory,sequence):
 	
 	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
 	task.connect([(pp,nu,[('output.ufunc','source'),
-						 ('output.mask','mask'),
+						 ('output.mask','brain_mask'),
 						 ('output.movement','movement')])])
 	task.connect(nu,"regressors",glm,"design")
 	task.connect(pp,"output.func",glm,"in_file")
@@ -723,20 +727,34 @@ def asl(directory,sequence):
 
 # run pipeline if used as standalone script
 if __name__ == "__main__":	
+	opts = "[-asl|-ert|-resting1|-resting2|-reward]"
+	opt_list = []
+	
 	# get arguments
 	if len(sys.argv) < 2:
-		print "Usage: embarc.py <embarc subject directory>"
+		print "Usage: embarc.py "+opts+" <embarc subject directory>"
 		sys.exit(1)
 	
 	# logging verbosity
 	import nipype
 	import logging
 	from nipype import config
+	import nipype.interfaces.matlab as mlab 
 	
 	# pick dataset that we'll be wroking on
-	directory = sys.argv[1]
+	for arg in sys.argv:
+		 if arg in opts:
+		 	opt_list.append(arg)
+	directory = sys.argv[len(sys.argv)-1]
 	
+	# check directory
+	if not os.path.exists(directory):
+		print "Error: data directory "+directory+" does not exist"
+		sys.exit(1)
 	
+	if "subject" == get_subject(directory):
+		print "Error: "+directory+" is not a valid EMBARC data directory"
+		sys.exit(1)
 	
 	# setup logging, display and other config
 	disp = os.environ['DISPLAY']
@@ -757,28 +775,37 @@ if __name__ == "__main__":
 	l.setFormatter(logging.Formatter('%(name)-2s %(levelname)-2s:\t %(message)s'))
 	###########
 	
+	# setup matlab env
+	mlab.MatlabCommand.set_default_matlab_cmd("matlab -nodesktop -nosplash")
+	mlab.MatlabCommand.set_default_terminal_output('stream')
+	#mlab.MatlabCommand.set_default_paths(bin_dir)
 	
-	#log.info("\n\nERT pipeline ...\n\n")
-	#ert = task(directory,'ert')
-	#ert.run()
-	#ert.run(plugin='MultiProc', plugin_args={'n_procs' : 4})
+	if len(opt_list) == 0 or "-ert" in opt_list:
+		log.info("\n\nERT pipeline ...\n\n")
+		ert = task(directory,'ert')
+		ert.run()
+		ert.run(plugin='MultiProc', plugin_args={'n_procs' : 4})
 	
-	#do reward
-	#log.info("\n\nREWARD pipeline ...\n\n")
-	#reward = task(directory,'reward')
-	#reward.run()
+	if len(opt_list) == 0 or "-reward" in opt_list:
+		log.info("\n\nREWARD pipeline ...\n\n")
+		reward = task(directory,'reward')
+		reward.run()
 
-	# do resting1
-	log.info("\n\nRESTING1 pipeline ...\n\n")
-	resting1 = resting(directory,'resting1')
-	resting1.run()
+	if len(opt_list) == 0 or "-resting1" in opt_list:
+		log.info("\n\nRESTING1 pipeline ...\n\n")
+		resting1 = resting(directory,'resting1')
+		resting1.run()
 
 	# do resting2
-	log.info("\n\nRESTING2 pipeline ...\n\n")
-	#resting2 = resting(directory,'resting2')
-	#resting2.run()
+	if len(opt_list) == 0 or "-resting2" in opt_list:
+		log.info("\n\nRESTING2 pipeline ...\n\n")
+		resting2 = resting(directory,'resting2')
+		resting2.run()
 	
 	# do asl
-	#log.info("\n\nASL pipeline ...\n\n")
-	#asl = asl(directory,'asl')
-	#asl.run()
+	if len(opt_list) == 0 or "-asl" in opt_list:
+		log.info("\n\nASL pipeline ...\n\n")
+		asl = asl(directory,'asl')
+		asl.run()
+		
+	log.info("\n\npipeline complete\n\n")

@@ -1,0 +1,4 @@
+#!/bin/sh
+. /raid/r3/p1/Phillips/projects/Eugene/projects/EMBARC/project.properties
+export PATH=/usr/local/pkg/afni_2013:$PATH
+embarc.py $@

@@ -162,31 +162,6 @@ class PPPI(BaseInterface):
         P.directory=char('$directory');
 		mat = [char($subject),'_analysis_',char($voi_name),'.mat'];
 		mkdir('PPI');
-		
-		% modify path to mask
-		%load([P.directory '/SPM.mat']);
-		%dir = SPM.swd;
-		%if isfield(SPM,'owd')
-		%	dir = SPM.owd;
-		%else
-		%	SPM.owd = dir;
-		%end
-		%if isfield(SPM,'VM')
-		%	[pth,fname,ext] = fileparts(SPM.VM.fname);
-		%	SPM.VM.fname = [dir '/' fname ext];
-		%end
-		%if isfield(SPM,'VResMS')
-		%	[pth,fname,ext] = fileparts(SPM.VResMS.fname);
-		%	SPM.VResMS.fname = [dir '/' fname ext];
-		%end
-		%if isfield(SPM,'Vbeta')
-		%	for i = 1:length(SPM.Vbeta)
-		%		[pth,fname,ext] = fileparts(SPM.Vbeta(i).fname);
-		%		SPM.Vbeta(i).fname = [dir '/' fname ext];
-		%	end
-		%end
-		%SPM.swd = '.';
-		%save([P.directory '/SPM.mat'],'SPM');
 		save(mat,'P');
         PPPI(mat);
        	exit;
@@ -382,8 +357,11 @@ def save_csv(task,units,names,ext):
 ##############################################################################		
 class NuisanceInputSpec(BaseInterfaceInputSpec): 
 	source = InputMultiPath(File(exists=True),desc='Unsmoothed Functional 4D file',field="source",mandatory=True)
-	mask   = InputMultiPath(File(exists=True),desc='Brain mask 3D nifti file',field="mask",mandatory=True)
-	movement = InputMultiPath(File(exists=True),desc='Realigned Movement .txt file',field="movement",mandatory=True)
+	brain_mask = InputMultiPath(File(exists=True),desc='Brain mask 3D nifti file',field="mask",mandatory=True)
+	white_mask = InputMultiPath(File(exists=True),desc='White matter mask 3D nifti file',field="mask",mandatory=True)
+	movement = InputMultiPath(File(exists=True,copyfile=True),desc='Realigned Movement .txt file',field="movement",mandatory=True)
+	regressors = File(value='regressors.txt',desc='Output Regressors .txt  File',field='output',usedefault=True, genfile=True, hash_files=False)
+
 class NuisanceOutputSpec(TraitedSpec):
 	regressors = File(exists=True, desc='Generated regressors .txt file')
 	
@@ -403,12 +381,16 @@ class Nuisance(BaseInterface):
 		from nipype.utils.filemanip import filename_to_list,list_to_filename
 
 		# setup parameters
-		
 		d = dict()
+		d['source'] = str(self.inputs.source)
+		d['brain']  = str(self.inputs.brain_mask)
+		d['white']  = str(self.inputs.white_mask)
+		d['movement'] = str(self.inputs.movement)
+		d['regressors'] = "'"+str(self.inputs.regressors)+"'"
+		#d['directory'] = os.path.dirname(re.sub("[\[\]']","",d['source']))
 		myscript = Template("""
 		warning('off','all');
-		cd('$directory');
-	
+		nuisance($source,$white,$brain,$movement,$regressors);
        	exit;
 		""").substitute(d)
 		mlab = MatlabCommand(script=myscript, mfile=True)
@@ -417,5 +399,6 @@ class Nuisance(BaseInterface):
 
 	def _list_outputs(self):
 		outputs = self._outputs().get()
-		#outputs['spm_mat_file'] = self.inputs.spm_mat_file
+		#out = os.path.dirname(re.sub("[\[\]']","",str(self.inputs.source)))+"/"
+		outputs['regressors'] = os.getcwd()+"/"+self.inputs.regressors
 		return outputs	
