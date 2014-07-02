@@ -18,7 +18,7 @@ import numpy as np
 
 # Local imports
 from nipype.interfaces.base import (OutputMultiPath, TraitedSpec, isdefined,
-                                    traits, InputMultiPath, File)
+                                    traits, InputMultiPath, File, CommandLineInputSpec,CommandLine)
 from nipype.interfaces.spm.base import (SPMCommand, scans_for_fname,
                                         func_is_3d,
                                         scans_for_fnames, SPMCommandInputSpec)
@@ -188,7 +188,7 @@ class PPPI(BaseInterface):
 ##############################################################################		
 class ImageCalcInputSpec(SPMCommandInputSpec):
 	#in_file =  File(exists=True, desc='Input Image',field='input',mandatory=True,copyFile=True)
-	in_file =  InputMultiPath(File(exists=True), field='input',desc='Input Image',mandatory=True,copyfile=True)
+	in_file =  InputMultiPath(File(exists=True), field='input',desc='Input Image',mandatory=True,copyfile=False)
 	out_file = File(value='out.nii',desc='Output Image Name',field='output',usedefault=True, genfile=True, hash_files=False)
 	out_dir =  File(value='', field='outdir', usedefault=True,desc='Output directory')
 	expression = traits.String(field='expression', mandatory=True,desc='Expression for Calculation')
@@ -250,7 +250,7 @@ class ImageCalc(SPMCommand):
 ##############################################################################		
 
 class ROIExtractorInputSpec(SPMCommandInputSpec):
-	source = InputMultiPath(File(exists=True), field='src.srcimgs', desc='Source Images',copyfile=True, mandatory=True)
+	source = InputMultiPath(File(exists=True), field='src.srcimgs', desc='Source Images',copyfile=False, mandatory=True)
 	roi_images = traits.List(File(exists=True),field='roispec{*}.srcimg',desc='Lis of ROI images',mandatory=True)
 	average = traits.Enum("none","vox",field="avg",usedefault=True,desc='Average')
 	interpelation = traits.Int(0, field='interp', usedefault=True,desc='Interpelation')
@@ -330,14 +330,15 @@ class ROIExtractor(SPMCommand):
 		out = os.path.dirname(re.sub("[\[\]']","",str(self.inputs.source)))+"/"
 		outputs['mat_file'] = out+"ext.mat"
 		return outputs
+		
 ###########################################################################		
 # Save CSV file in EMBARC format
-def save_csv(task,units,names,ext):
+def save_csv(task,units,names,ext,output="output.csv"):
 	# load .mat file
 	import scipy.io as sp
 	import numpy
 	import os
-	outfile = os.getcwd()+"/output.csv"
+	outfile = os.getcwd()+"/"+output
 	values = sp.loadmat(ext,squeeze_me=True)
 	raw = values.get('ext')['raw']
 	with open(outfile, "w") as f:
@@ -402,3 +403,70 @@ class Nuisance(BaseInterface):
 		#out = os.path.dirname(re.sub("[\[\]']","",str(self.inputs.source)))+"/"
 		outputs['regressors'] = os.getcwd()+"/"+self.inputs.regressors
 		return outputs	
+		
+		
+##############################################################################		
+##############################################################################		
+class PrintInputSpec(BaseInterfaceInputSpec): 
+	in_file = InputMultiPath(File(exists=True),desc='Input File',mandatory=True)
+	out_file = File(value='print.ps',desc='Output Postscript File',usedefault=True, genfile=True)
+class PrintOutputSpec(TraitedSpec):
+	out_file = File(exists=True, desc='Output PDF file')
+	
+"""
+	Print NIFTI files OR SPM.mat design matrix OR Realign&Unwarp File
+"""
+class Print(BaseInterface):
+	input_spec = PrintInputSpec
+	output_spec = PrintOutputSpec
+	
+	def _run_interface(self, runtime):
+		from nipype.interfaces.spm.base import scans_for_fname,scans_for_fnames
+		from nipype.utils.filemanip import filename_to_list,list_to_filename
+
+		# setup parameters
+		d = dict()
+		d['in_file'] = str(self.inputs.in_file)
+		d['out_file']  = str(self.inputs.out_file)
+		myscript = Template("""
+		warning('off','all');
+		
+		input = $in_file;
+		output = '$out_file';
+		
+		[pathstr,name,ext] = fileparts(input);
+		
+		if strcmp(ext,'.txt')
+			plot_realignment_parameters(input,output);
+		elseif strcmp(ext,'.mat')
+			plot_design_matrix(input,output);
+		elseif strcmp(ext,'.nii')
+			nifti2jpeg(input);
+			system(['jpeg2ps ' output ' ' pathstr '*.jpg' ]);
+		end
+	   	exit;
+		""").substitute(d)
+		mlab = MatlabCommand(script=myscript, mfile=True)
+		result = mlab.run()
+		return result.runtime
+
+	def _list_outputs(self):
+		outputs = self._outputs().get()
+		outputs['out_file'] = os.getcwd()+"/"+self.inputs.out_file
+		return outputs
+
+############################################################################
+class FLTInputSpec(CommandLineInputSpec):
+	in_file = traits.String(desc="Input Subject Directory", exists=True, mandatory=True, argstr="%s")
+	out_file = traits.String(desc = "CSV file")
+class FLTOutputSpec(TraitedSpec):
+	out_file = traits.String(desc = "CSV file")
+
+class FLT(CommandLine):
+	_cmd = "create_FLT_summary.pl"
+	input_spec = FLTInputSpec
+	output_spec = FLTOutputSpec
+	def _list_outputs(self):
+		outputs = self.output_spec().get()
+		outputs['out_file'] = self.inputs.out_file
+		return outputs

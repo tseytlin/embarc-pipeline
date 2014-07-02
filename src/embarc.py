@@ -10,6 +10,7 @@ import re
 # some predefined constants
 bin_dir = os.path.dirname(os.path.realpath(__file__))
 OASIS_template = bin_dir+"/../validation/templates/OASIS-30_Atropos_template_in_MNI152_2mm.nii.gz"
+OASIS_labels = bin_dir+"/../validation/templates/OASIS-TRT-20_jointfusion_DKT31_CMA_labels_in_MNI152_2mm.nii.gz"
 ROI_dir = bin_dir+"/../validation/ROI_EMBARC_scaled2mm/"
 
 """
@@ -43,28 +44,34 @@ def preprocess():
 	realign = pe.Node(interface=spm.Realign(), name="realign")
 	realign.inputs.register_to_mean = True
 
-	func_bet = pe.Node(interface=fsl.BET(), name="func_bet")
+	func_bet = pe.Node(interface=fsl.BET(), name="bet_mean")
 	func_bet.inputs.mask = True
 	func_bet.inputs.frac = 0.5
 	func_bet.inputs.robust = True
 	func_bet.inputs.vertical_gradient = 0
 	
-	sfunc_bet = pe.Node(interface=fsl.BET(), name="func_mask")
+	sfunc_bet = pe.Node(interface=fsl.BET(), name="bet_func")
 	sfunc_bet.inputs.mask = True
 	sfunc_bet.inputs.frac = 0.5
 	sfunc_bet.inputs.robust = True
 	sfunc_bet.inputs.vertical_gradient = 0
 	
-	struct_bet = pe.Node(interface=fsl.BET(), name="struct_bet")
-	struct_bet.inputs.mask = True
-	struct_bet.inputs.frac = 0.5
-	struct_bet.inputs.robust = True
-	struct_bet.inputs.vertical_gradient = 0
-	struct_bet.inputs.center = [133,115,88]	
+	#struct_bet = pe.Node(interface=fsl.BET(), name="struct_bet")
+	#struct_bet.inputs.mask = True
+	#struct_bet.inputs.frac = 0.5
+	#struct_bet.inputs.robust = True
+	#struct_bet.inputs.vertical_gradient = 0
+	#struct_bet.inputs.center = [133,115,88]	
+	
+	struct_bet = pe.Node(interface=afni.SkullStrip(), name="skull_strip")
+	struct_bet.inputs.args = " -ld 30 -push_to_edge -no_avoid_eyes "
+	struct_bet.inputs.outputtype = 'NIFTI'
 	
 	#coregister = pe.Node(interface=spm.Coregister(), name="coregister")
 	#coregister.inputs.jobtype = 'estimate'
-	coregister = pe.Node(interface=fsl.FLIRT(), name='coregister')
+	
+	# coregister structural to mean functional 
+	coregister = pe.Node(interface=fsl.FLIRT(), name='flirt_mean2struct')
 	coregister.inputs.cost = 'corratio'
 	coregister.inputs.bins = 256
 	coregister.inputs.dof = 12
@@ -73,11 +80,12 @@ def preprocess():
 	coregister.inputs.searchr_y = [-180, 180]
 	coregister.inputs.searchr_z = [-180, 180]
 	
-	coreg_xfm = pe.Node(interface=fsl.ApplyXfm(),name='coreg_xfm')
+	# apply transform to realigned 4d functional referenced to structural
+	coreg_xfm = pe.Node(interface=fsl.ApplyXfm(),name='apply_func2struct')
 	coreg_xfm.inputs.interp = 'trilinear'
-	#coreg_xfm.inputs.reference = template
 	
-	flirt = pe.Node(interface=fsl.FLIRT(), name='flirt')
+	# coregister structural to template	            
+	flirt = pe.Node(interface=fsl.FLIRT(), name='flirt_struct2template')
 	flirt.inputs.cost = 'corratio'
 	flirt.inputs.bins = 256
 	flirt.inputs.dof = 12
@@ -87,15 +95,26 @@ def preprocess():
 	flirt.inputs.searchr_z = [-180, 180]
 	flirt.inputs.reference = template
 	
-	xfm = pe.Node(interface=fsl.ApplyXfm(),name='apply_xfm')
-	#xfm.inputs.cost = 'corratio'
-	#xfm.inputs.bins = 256
-	#xfm.inputs.dof = 12
+	# apply transform to coregistered 4D functional referenced template
+	xfm = pe.Node(interface=fsl.ApplyXfm(),name='apply_func2template')
 	xfm.inputs.interp = 'trilinear'
-	#xfm.inputs.searchr_x = [-180, 180]
-	#xfm.inputs.searchr_y = [-180, 180]
-	#xfm.inputs.searchr_z = [-180, 180]
 	xfm.inputs.reference = template
+		
+	# apply transform to coregistered 4D functional referenced template
+	sxfm = pe.Node(interface=fsl.ApplyXfm(),name='apply_struct2template')
+	sxfm.inputs.interp = 'trilinear'
+	sxfm.inputs.reference = template
+
+
+	# do fnirt
+	fnirt_s2t = pe.Node(interface=fsl.FNIRT(), name='fnirt_struct2template')	
+	fnirt_s2t.inputs.ref_file = template
+	
+	warp_f2t  = pe.Node(interface=fsl.ApplyWarp(), name='warp_func2template')	
+	warp_f2t.inputs.ref_file = template
+	
+	warp_s2t  = pe.Node(interface=fsl.ApplyWarp(), name='warp_structtemplate')	
+	warp_s2t.inputs.ref_file = template
 	
 	susan = pe.Node(interface=fsl.SUSAN(), name="smooth")
 	susan.inputs.brightness_threshold = 2000.0
@@ -105,7 +124,7 @@ def preprocess():
 	despike.inputs.outputtype = 'NIFTI'
 
 	outputnode = pe.Node(interface=util.IdentityInterface(
-				 fields=['func','ufunc','mask','movement']),name='output')
+				 fields=['func','ufunc','mask','movement','struct']),name='output')
 
 
 	preproc.connect([(inputnode,realign,[('func','in_files')]),
@@ -114,22 +133,33 @@ def preprocess():
 					 
 					 (struct_bet,coregister,[('out_file','reference')]),
 					 (func_bet,coregister,[('out_file','in_file')]),
-					 
+				
 					 (coregister,coreg_xfm,[('out_matrix_file','in_matrix_file')]),
 					 (realign,coreg_xfm,[('realigned_files','in_file')]),
 					 (struct_bet,coreg_xfm,[('out_file','reference')]),
-					 
+				
 					 (struct_bet,flirt,[('out_file','in_file')]),
 		             (coreg_xfm,xfm,[('out_file','in_file')]),
 		             (flirt,xfm,[('out_matrix_file','in_matrix_file')]),
+		           	 (struct_bet,sxfm,[('out_file','in_file')]),
+		             (flirt,sxfm,[('out_matrix_file','in_matrix_file')]),
+		           
+					 (sxfm,fnirt_s2t,[('out_file','in_file')]),
+		             (xfm,warp_f2t,[('out_file','in_file')]),
+		             (fnirt_s2t,warp_f2t,[('field_file','field_file')]),
 		             
-		             (xfm,despike,[('out_file','in_file')]),
+		             (sxfm,warp_s2t,[('out_file','in_file')]),
+		             (fnirt_s2t,warp_s2t,[('field_file','field_file')]),
+		             
+		             #(xfm,despike,[('out_file','in_file')]),
+		           	 (warp_f2t,despike,[('out_file','in_file')]),
 		             (despike,susan, [('out_file', 'in_file')]), 
 		             (despike,outputnode, [('out_file', 'ufunc')]), 
 		             (susan,outputnode,[('smoothed_file','func')]),
 		             (susan,sfunc_bet,[('smoothed_file','in_file')]),
 		             (sfunc_bet,outputnode,[('mask_file','mask')]),
-		             (realign,outputnode,[('realignment_parameters','movement')])
+		             (realign,outputnode,[('realignment_parameters','movement')]),
+		             (warp_s2t,outputnode,[('out_file','struct')])
 		             ])
 	return preproc
 
@@ -347,13 +377,16 @@ def task(directory,sequence):
 	from nipype.interfaces.utility import Function
 	import nipype.algorithms.misc as misc
 	import nipype.interfaces.utility as util     # utility
+	import nipype.interfaces.io as nio           # Data i/o
 	
 	# define base directory
 	base_dir = os.path.abspath(directory+"/analysis/")
 	if not os.path.exists(base_dir):
 		os.makedirs(base_dir)
 	subject = get_subject(directory)
-
+	out_dir = os.path.abspath(directory+"/output/"+sequence)
+	if not os.path.exists(out_dir):
+		os.makedirs(out_dir)
 		
 	# get components
 	ds = datasource(directory,sequence)
@@ -448,10 +481,10 @@ def task(directory,sequence):
 					 ("BR3_anticipation_PPI",ROI_dir+"BR3_2mm.img"),
 					 ("BR4_anticipation_PPI",ROI_dir+"BR4_2mm.img")])]
 			
-
-	#merge = pe.JoinNode(interface= misc.MergeCSVFiles(),name="merge_csv",joinsource="save_csv",joinfield='in_files')
-	#merge.inputs.column_headings = ["Task","Region","Mean","SD","Unit"]
-	#merge.inputs.out_file = subject+"_"+sequence+".csv"
+	datasink = pe.Node(nio.DataSink(), name='datasink')
+	datasink.inputs.base_directory = out_dir
+	
+	task.connect(l1,"output.con_images",datasink,"data.l1")
 	
 	for i in range(0,len(l1_rois)):
 		# extract ROIs from  level1 analysis
@@ -463,15 +496,16 @@ def task(directory,sequence):
 		
 		# save CSV file
 		save_csv = pe.Node(name="save_csv_"+l1_names[i],
-			interface=Function(input_names=["task","units","names","ext"],
+			interface=Function(input_names=["task","units","names","ext","output"],
 			output_names=["csv_file"],function=wrap.save_csv))
 		save_csv.inputs.task = task_name
 		save_csv.inputs.units = task_units
 		save_csv.inputs.names = list(zip(*l1_rois[i])[0])
+		save_csv.inputs.output = subject+"_"+sequence+"_outcomes_"+l1_names[i]+".csv"
 		task.connect(extract,"mat_file",save_csv,"ext")
-		#task.connect(save_csv,"csv_file",merge,"in_files")
+		task.connect(save_csv,"csv_file",datasink,"csv.@par"+l1_names[i])
 		
-	
+		
 	# do PPPI on a set of ROIs
 	
 	# now do gPPI analysis
@@ -493,11 +527,12 @@ def task(directory,sequence):
 	
 		# save CSV file
 		save_csv = pe.Node(name="save_csv_"+roi[0],
-			interface=Function(input_names=["task","units","names","ext"],
+			interface=Function(input_names=["task","units","names","ext","output"],
 			output_names=["csv_file"],function=wrap.save_csv))
 		save_csv.inputs.task = task_name
 		save_csv.inputs.units = task_units
 		save_csv.inputs.names = list(zip(*roi[2])[0])
+		save_csv.inputs.output = subject+"_"+sequence+"_outcomes_"+roi[0]+".csv"
 		
 		task.connect(l2,'output.contrasts',pppi,'spm_mat_file')
 		task.connect(pppi,'spm_mat_file',estimate,'spm_mat_file')
@@ -507,9 +542,47 @@ def task(directory,sequence):
 		task.connect(estimate,'residual_image',contrast,'residual_image')
 		task.connect(contrast,('con_images',subset,0),extract,'source')
 		task.connect(extract,"mat_file",save_csv,"ext")
+		task.connect(save_csv,"csv_file",datasink,"csv.@par"+roi[0])
+		task.connect(contrast,('con_images',subset,0),datasink,"data.l1_pppi_"+roi[0])
 	
-	outputnode = pe.Node(interface=util.IdentityInterface(fields=['csv_file']),name='output')
-	#task.connect(merge,"out_file",ouputnode,"csv_file")
+	task.connect(pp,"output.func",datasink,"data.functional")
+	task.connect(pp,"output.struct",datasink,"data.structural")
+	task.connect(pp,"output.mask",datasink,"data.mask")
+	
+	# print
+	p_ru = pe.Node(interface=wrap.Print(), name="print_realign_params")
+	p_ru.inputs.out_file = "realignment_parameters.ps"
+	
+	p_dm = pe.Node(interface=wrap.Print(), name="print_design_matrix")
+	p_dm.inputs.out_file = "level1_design_matrix.ps"
+	
+	p_pdm = pe.Node(interface=wrap.Print(), name="print_pppi_design_matrix")
+	p_pdm.inputs.out_file = "level1_pppi_design_matrix.ps"
+	
+	p_struct = pe.Node(interface=wrap.Print(), name="print_anatomical")
+	p_struct.inputs.out_file = "brain_anatomical.ps"
+	
+	p_func = pe.Node(interface=wrap.Print(), name="print_func")
+	p_func.inputs.out_file = "brain_func.ps"
+	
+	p_mask = pe.Node(interface=wrap.Print(), name="print_mask")
+	p_mask.inputs.out_file = "brain_mask.ps"
+	
+	
+	task.connect(pp,"output.movement",p_ru,"in_file")
+	task.connect(l1,"output.contrasts",p_dm,"in_file")
+	task.connect(l2,"output.contrasts",p_pdm,"in_file")
+	task.connect(pp,"output.struct",p_struct,"in_file")
+	task.connect(pp,"output.func",p_func,"in_file")
+	task.connect(pp,"output.mask",p_mask,"in_file")
+	
+	task.connect(p_ru,"out_file",datasink,"ps.@par1")
+	task.connect(p_dm,"out_file",datasink,"ps.@par2")
+	task.connect(p_pdm,"out_file",datasink,"ps.@par3")
+	task.connect(p_func,"out_file",datasink,"ps.@par4")
+	task.connect(p_struct,"out_file",datasink,"ps.@par5")
+	task.connect(p_mask,"out_file",datasink,"ps.@par6")
+	
 		
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
 	return task
@@ -523,10 +596,19 @@ def resting(directory,sequence):
 	import CPAC									 # import CPAC nuisance
 	import nipype.interfaces.fsl as fsl          # fsl
 	import wrappers as wrap	
+	import nipype.interfaces.afni as afni		 # afni
+	from nipype.interfaces.utility import Function
+	import nipype.interfaces.io as nio           # Data i/o
+	import nipype.algorithms.misc as misc
+		
 	# define base directory
 	base_dir = os.path.abspath(directory+"/analysis/")
 	if not os.path.exists(base_dir):
 		os.makedirs(base_dir)
+	out_dir = os.path.abspath(directory+"/output/"+sequence)
+	if not os.path.exists(out_dir):
+		os.makedirs(out_dir)
+	subject = get_subject(directory)
 	
 	# get components
 	ds = datasource(directory,sequence)
@@ -546,7 +628,68 @@ def resting(directory,sequence):
 	reho = CPAC.reho.create_reho()
 	reho.inputs.inputspec.cluster_size = 27
 	
-	nc = CPAC.network_centrality.create_resting_state_graphs()
+	nc = CPAC.network_centrality.create_resting_state_graphs(wf_name='network_centrality')
+	nc.inputs.centrality_options.method_options=[True, True]
+	nc.inputs.centrality_options.weight_options=[True, True]
+	nc.inputs.inputspec.threshold_option = 1
+	nc.inputs.inputspec.threshold = 0.0744 
+	nc.inputs.inputspec.template = OASIS_labels
+	zscore =  CPAC.network_centrality.get_zscore(wf_name='z_score')
+	
+	
+	sca = CPAC.sca.create_sca(name_sca='sca');
+	#tonifti = pe.Node(interface=misc.CreateNifti(),name="to_nifti")
+	#tonifti.inputs.data_file = ROI_dir+'L_insula_2mm.img'
+	#tonifti.inputs.header_file = ROI_dir+'L_insula_2mm.hdr'
+	
+	maskave = pe.Node(interface=afni.Maskave(),name="mask_ave")
+	maskave.inputs.outputtype = "NIFTI"
+	maskave.inputs.quiet= True
+	gunzip = pe.Node(interface=misc.Gunzip(),name="gunzip")
+	
+	#maskave.inputs.mask = ROI_dir+'L_insula_2mm.img'
+	
+	task_name = "Resting_First_Block"
+	if sequence == 'resting2':
+		task_name = "Resting_Second_Block"
+		
+	task_units = "Z_Score"
+	resting_roi_names = ['LeftInsula','RightInsula','LeftAmygdala',
+						'RightAmygdala','LeftVS','RightVS','LeftBA9','RightBA9',
+						'BR1','BR2','BR3','BR4','BR9']
+	resting_roi_images = [ROI_dir+'L_insula_2mm.img',ROI_dir+'R_insula_2mm.img',
+					ROI_dir+'L_amyg_2mm.img',ROI_dir+'R_amyg_2mm.img',
+					ROI_dir+'VS_left_2mm.img',ROI_dir+'VS_right_2mm.img',
+					ROI_dir+'BA09_left_2mm.img',ROI_dir+'BA09_right_2mm.img',
+					ROI_dir+'BR1_2mm.img',ROI_dir+'BR2_2mm.img',
+					ROI_dir+'BR3_2mm.img',ROI_dir+'BR4_2mm.img',
+					ROI_dir+'BR9_2mm.img' ]
+	
+
+	extract = dict()
+	save_csv = dict()
+	
+	for nm in ["ALFF","ReHO","NC","SCA"]: 
+		ext = pe.Node(interface=wrap.ROIExtractor(),name="extract_"+nm)
+		ext.inputs.roi_images = resting_roi_images
+		ext.inputs.average = 'none'
+		ext.inputs.interpelation = 0
+		extract[nm] = ext
+		
+		csv = pe.Node(name="save_"+nm,interface=Function(
+			input_names=["task","units","names","ext","output"],
+			output_names=["csv_file"],function=wrap.save_csv))
+		csv.inputs.task = task_name
+		csv.inputs.units = task_units
+		csv.inputs.names = [nm+"_"+ s for s in resting_roi_names]
+		csv.inputs.output = subject+"_"+sequence+"_outcomes_"+nm+".csv"
+		save_csv[nm] = csv
+	
+	
+	
+	datasink = pe.Node(nio.DataSink(), name='datasink')
+	datasink.inputs.base_directory = out_dir
+	
 
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
@@ -564,12 +707,105 @@ def resting(directory,sequence):
 
 	task.connect(filt,"out_file",reho,"inputspec.rest_res_filt")
 	task.connect(pp,"output.mask",reho,"inputspec.rest_mask")
+	
+	task.connect(glm,'out_res',nc,'inputspec.subject')
+	task.connect(nc,'outputspec.centrality_outputs',zscore,'inputspec.input_file')
+	task.connect(pp,'output.mask',zscore,'inputspec.mask_file')
+
+	task.connect(filt,"out_file",maskave,"in_file")
+	task.connect(pp,"output.mask",maskave,"mask")
+	#task.connect(tonifti,"nifti_file",maskave,"mask")
+	
+	task.connect(filt,"out_file",sca,"inputspec.functional_file")
+	task.connect(maskave,"out_file",sca,"inputspec.timeseries_one_d")
+	
+	task.connect(alff,"outputspec.alff_Z_img",extract["ALFF"],'source')
+	task.connect(extract["ALFF"],"mat_file",save_csv["ALFF"],"ext")
+
+	task.connect(reho,"outputspec.z_score",extract["ReHO"],'source')
+	task.connect(extract["ReHO"],"mat_file",save_csv["ReHO"],"ext")
+	
+	task.connect(zscore,("outputspec.z_score_img",subset,0),extract["NC"],'source')
+	task.connect(extract["NC"],"mat_file",save_csv["NC"],"ext")
+	
+	task.connect(sca,("outputspec.Z_score",subset,0),gunzip,'in_file')
+	task.connect(gunzip,"out_file",extract["SCA"],'source')
+	
+	task.connect(extract["SCA"],"mat_file",save_csv["SCA"],"ext")
+	
+	task.connect(save_csv["ALFF"],"csv_file",datasink,"csv.@par1")
+	task.connect(save_csv["ReHO"],"csv_file",datasink,"csv.@par2")
+	task.connect(save_csv["NC"],"csv_file",datasink,"csv.@par3")
+	task.connect(save_csv["SCA"],"csv_file",datasink,"csv.@par4")
+
+	task.connect(alff,"outputspec.alff_Z_img",datasink,"data.alff")
+	task.connect(reho,"outputspec.z_score",datasink,"data.reho")
+	task.connect(sca,"outputspec.Z_score",datasink,"data.sca")
+	task.connect(zscore,"outputspec.z_score_img",datasink,"data.nc")
+	task.connect(pp,"output.func",datasink,"data.functional")
+	task.connect(pp,"output.struct",datasink,"data.structural")
+	task.connect(pp,"output.mask",datasink,"data.mask")
+
+	# print
+	p_ru = pe.Node(interface=wrap.Print(), name="print_realign_params")
+	p_ru.inputs.out_file = "realignment_parameters.ps"
+	
+	p_struct = pe.Node(interface=wrap.Print(), name="print_anatomical")
+	p_struct.inputs.out_file = "brain_anatomical.ps"
+	
+	p_func = pe.Node(interface=wrap.Print(), name="print_func")
+	p_func.inputs.out_file = "brain_func.ps"
+	
+	p_mask = pe.Node(interface=wrap.Print(), name="print_mask")
+	p_mask.inputs.out_file = "brain_mask.ps"
+	
+	
+	task.connect(pp,"output.movement",p_ru,"in_file")
+	task.connect(pp,"output.struct",p_struct,"in_file")
+	task.connect(pp,"output.func",p_func,"in_file")
+	task.connect(pp,"output.mask",p_mask,"in_file")
+	
+	task.connect(p_ru,"out_file",datasink,"ps.@par1")
+	task.connect(p_func,"out_file",datasink,"ps.@par4")
+	task.connect(p_struct,"out_file",datasink,"ps.@par5")
+	task.connect(p_mask,"out_file",datasink,"ps.@par6")
+
 
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
 	return task
 
 def imcalc_expression(x):
 	return "i1/"+str(x)	
+
+
+def flt(directory,sequence):
+	import nipype.interfaces.base as base
+	import wrappers as wrap
+	import nipype.pipeline.engine as pe          # pypeline engine
+	import nipype.interfaces.io as nio           # Data i/o
+	# define base directory
+	base_dir = os.path.abspath(directory+"/analysis/")
+	if not os.path.exists(base_dir):
+		os.makedirs(base_dir)
+	out_dir = os.path.abspath(directory+"/output/"+sequence)
+	if not os.path.exists(out_dir):
+		os.makedirs(out_dir)
+	subject = get_subject(directory)
+		
+	work = pe.Workflow(name=sequence)
+	work.base_dir = base_dir
+	
+	flt = pe.Node(wrap.FLT(),name="FLT")
+	flt.inputs.in_file = os.path.abspath(directory+"/bhv_flt/eprime_flt.txt")
+	flt.inputs.out_file = os.path.abspath(directory+"/bhv_flt/"+subject+"_flt.csv")
+	
+	datasink = pe.Node(nio.DataSink(), name='datasink')
+	datasink.inputs.base_directory = out_dir
+	
+	work.connect(flt,"out_file",datasink,"csv")
+	work.write_graph(dotfilename=sequence+"-workflow")
+	
+	return work
 
 """
 EMBARC 2.0 ASL Sequence
@@ -582,15 +818,21 @@ def asl(directory,sequence):
 	import nipype.interfaces.utility as util     # utility
 	import nipype.interfaces.afni as afni		 # afni
 	from nipype.interfaces.utility import Function
-	
+	import nipype.interfaces.io as nio           # Data i/o
+
 	# define base directory
 	base_dir = os.path.abspath(directory+"/analysis/")
 	if not os.path.exists(base_dir):
 		os.makedirs(base_dir)
+	out_dir = os.path.abspath(directory+"/output/"+sequence)
+	if not os.path.exists(out_dir):
+		os.makedirs(out_dir)
+	subject = get_subject(directory)
 	
 	# get components
 	ds = datasource(directory,sequence)
-	
+	#pp = preprocess()
+
 	realign = pe.Node(interface=spm.Realign(), name="realign")
 	realign.inputs.register_to_mean = True
 	realign.inputs.write_which = [2,1]
@@ -604,14 +846,19 @@ def asl(directory,sequence):
 	func_bet.inputs.robust = True
 	func_bet.inputs.vertical_gradient = 0
 	
-	struct_bet = pe.Node(interface=fsl.BET(), name="struct_bet")
-	struct_bet.inputs.mask = True
-	struct_bet.inputs.frac = 0.5
-	struct_bet.inputs.robust = True
-	struct_bet.inputs.vertical_gradient = 0
-	struct_bet.inputs.center = [133,115,88]	
+	#struct_bet = pe.Node(interface=fsl.BET(), name="struct_bet")
+	#struct_bet.inputs.mask = True
+	#struct_bet.inputs.frac = 0.5
+	#struct_bet.inputs.robust = True
+	#struct_bet.inputs.vertical_gradient = 0
+	#struct_bet.inputs.center = [133,115,88]	
 	
-	coregister = pe.Node(interface=fsl.FLIRT(), name='coregister')
+	struct_bet = pe.Node(interface=afni.SkullStrip(), name="skull_strip")
+	struct_bet.inputs.args = " -ld 30 -push_to_edge -no_avoid_eyes "
+	struct_bet.inputs.outputtype = 'NIFTI'
+	
+	
+	coregister = pe.Node(interface=fsl.FLIRT(), name='flirt_mean2struct')
 	coregister.inputs.cost = 'corratio'
 	coregister.inputs.bins = 256
 	coregister.inputs.dof = 12
@@ -620,10 +867,10 @@ def asl(directory,sequence):
 	coregister.inputs.searchr_y = [-180, 180]
 	coregister.inputs.searchr_z = [-180, 180]
 	
-	coreg_xfm = pe.Node(interface=fsl.ApplyXfm(),name='coreg_xfm')
+	coreg_xfm = pe.Node(interface=fsl.ApplyXfm(),name='apply_func2struct')
 	coreg_xfm.inputs.interp = 'trilinear'
 	
-	flirt = pe.Node(interface=fsl.FLIRT(), name='flirt')
+	flirt = pe.Node(interface=fsl.FLIRT(), name='flirt_struct2template')
 	flirt.inputs.cost = 'corratio'
 	flirt.inputs.bins = 256
 	flirt.inputs.dof = 12
@@ -633,9 +880,27 @@ def asl(directory,sequence):
 	flirt.inputs.searchr_z = [-180, 180]
 	flirt.inputs.reference = OASIS_template
 	
-	xfm = pe.Node(interface=fsl.ApplyXfm(),name='apply_xfm')
+	xfm = pe.Node(interface=fsl.ApplyXfm(),name='apply_func2template')
 	xfm.inputs.interp = 'trilinear'
 	xfm.inputs.reference = OASIS_template
+	
+		
+	# apply transform to coregistered 4D functional referenced template
+	sxfm = pe.Node(interface=fsl.ApplyXfm(),name='apply_struct2template')
+	sxfm.inputs.interp = 'trilinear'
+	sxfm.inputs.reference = OASIS_template
+
+
+	# do fnirt
+	fnirt_s2t = pe.Node(interface=fsl.FNIRT(), name='fnirt_struct2template')	
+	fnirt_s2t.inputs.ref_file = OASIS_template
+	
+	warp_f2t  = pe.Node(interface=fsl.ApplyWarp(), name='warp_func2template')	
+	warp_f2t.inputs.ref_file = OASIS_template
+	
+	warp_s2t  = pe.Node(interface=fsl.ApplyWarp(), name='warp_structtemplate')	
+	warp_s2t.inputs.ref_file = OASIS_template
+		
 	
 	susan = pe.Node(interface=fsl.SUSAN(), name="smooth")
 	susan.inputs.brightness_threshold = 2000.0
@@ -686,17 +951,28 @@ def asl(directory,sequence):
 	roi.inputs.interpelation = 0
 	
 	save_csv = pe.Node(name="save_csv",
-			interface=Function(input_names=["task","units","names","ext"],
+			interface=Function(input_names=["task","units","names","ext","output"],
 			output_names=["csv_file"],function=wrap.save_csv))
 	save_csv.inputs.task = "Cerebral_Blood_Flow"
 	save_csv.inputs.units = "mL/min/100g"
 	save_csv.inputs.names = roi_names
+	save_csv.inputs.output = subject+"_"+sequence+"_outcomes_asl.csv"
+	
+	datasink = pe.Node(nio.DataSink(), name='datasink')
+	datasink.inputs.base_directory = out_dir
 	
 	outputnode = pe.Node(interface=util.IdentityInterface(fields=['csv_file']),name='output')
 	
 	
 	asl = pe.Workflow(name=sequence)
 	asl.base_dir = base_dir
+	
+	#pp.disconnect()
+	#asl.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
+	#asl.connect(pp,"realign.realigned_files",asl_node,"in_files")
+	#asl.connect(asl_node,'cbf_image',pp,"apply_func2struct.in_file")
+	#asl.connect(pp,"susan.smoothed_file",imcalc,"in_file")
+	
 	asl.connect(ds,'func',realign,'in_files')
 	asl.connect(realign,'realigned_files',asl_node,'in_files')
 	
@@ -712,22 +988,85 @@ def asl(directory,sequence):
 	asl.connect(struct_bet,'out_file',flirt,'in_file')
 	asl.connect(coreg_xfm,'out_file',xfm,'in_file')
 	asl.connect(flirt,'out_matrix_file',xfm,'in_matrix_file')
-		             
-	asl.connect(xfm,'out_file',susan, 'in_file') 
+
+	asl.connect(struct_bet,"out_file",sxfm,"in_file")
+	asl.connect(flirt,'out_matrix_file',sxfm,'in_matrix_file')         
+	
+	asl.connect(sxfm,'out_file',fnirt_s2t,'in_file')
+	asl.connect(xfm,'out_file',warp_f2t,'in_file')
+	asl.connect(fnirt_s2t,'field_file',warp_f2t,'field_file')
+	asl.connect(sxfm,'out_file',warp_s2t,'in_file')
+	asl.connect(fnirt_s2t,'field_file',warp_s2t,'field_file')
+	
+	asl.connect(warp_f2t,'out_file',susan, 'in_file') 
+	#asl.connect(xfm,'out_file',susan, 'in_file') 
 	asl.connect(susan,'smoothed_file',imcalc,'in_file')
 	asl.connect(asl_node,('cbf_value',imcalc_expression),imcalc,'expression')
 
 	asl.connect(imcalc,"out_file",roi,'source')
 	asl.connect(roi,"mat_file",save_csv,'ext')
 	asl.connect(save_csv,"csv_file",outputnode,"csv_file")
+	asl.connect(save_csv,"csv_file",datasink,"csv")
 	
+	
+	# print
+	p_ru = pe.Node(interface=wrap.Print(), name="print_realign_params")
+	p_ru.inputs.out_file = "realignment_parameters.ps"
+	
+	p_asl = pe.Node(interface=wrap.Print(), name="print_cbf")
+	p_asl.inputs.out_file = "brain_cbf.ps"
+			
+	asl.connect(realign,"realign_parameters",p_ru,"in_file")
+	asl.connect(asl_node,'cbf_image',p_asl,"in_file")
+	
+	asl.connect(p_ru,"out_file",datasink,"ps.@par1")
+	asl.connect(p_asl,"out_file",datasink,"ps.@par2")
+
 	asl.write_graph(dotfilename=sequence+"-workflow")
 	return asl;
 	
 
+# check sequence
+def check_sequence(opt_list,directory,seq):
+	seq_dir = "/dicom_bold_"+seq
+	if seq == "asl":
+		seq_dir = "/dicom_"+seq
+	elif seq == "flt":
+		seq_dir = "/bhv_flt"
+
+	# check if directory exists
+	if not os.path.exists(directory+seq_dir):
+		print "Error: data directory for "+seq+" does not exists, skipping .."
+		print "Missing directory: "+directory+seq_dir
+		return False
+
+	# if no sequence specified, check QC failed condition
+	if len(opt_list) == 0:
+		files = []
+		files.append(directory+seq_dir+"/FAIL.txt")
+		files.append(directory+seq_dir+"/FAIL_checked.txt")
+		if seq != "flt":
+			files.append(directory+"/dicom_anatomical/FAIL.txt")
+			files.append(directory+"/dicom_anatomical/FAIL_checked.txt")
+		
+		for f in files:
+			if os.path.exists(f):
+				print "Error: looks like "+seq+" has failed QA, skipping .."
+				print "QA file: "+f
+				return False
+		return True
+	# else if sequence specified, do it and ignore failed condition	
+	elif "-"+seq in opt_list:
+		return True
+	# else 	
+	return False
+
+
+
+
 # run pipeline if used as standalone script
 if __name__ == "__main__":	
-	opts = "[-asl|-ert|-resting1|-resting2|-reward]"
+	opts = "[-asl|-ert|-resting1|-resting2|-reward|-flt]"
 	opt_list = []
 	
 	# get arguments
@@ -736,6 +1075,7 @@ if __name__ == "__main__":
 		sys.exit(1)
 	
 	# logging verbosity
+	import time
 	import nipype
 	import logging
 	from nipype import config
@@ -780,32 +1120,47 @@ if __name__ == "__main__":
 	mlab.MatlabCommand.set_default_terminal_output('stream')
 	#mlab.MatlabCommand.set_default_paths(bin_dir)
 	
-	if len(opt_list) == 0 or "-ert" in opt_list:
+	if check_sequence(opt_list,directory,"ert"):
 		log.info("\n\nERT pipeline ...\n\n")
+		t = time.time()		
 		ert = task(directory,'ert')
 		ert.run()
-		ert.run(plugin='MultiProc', plugin_args={'n_procs' : 4})
+		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
+		#ert.run(plugin='MultiProc', plugin_args={'n_procs' : 4})
 	
-	if len(opt_list) == 0 or "-reward" in opt_list:
+	if check_sequence(opt_list,directory,"reward"):
 		log.info("\n\nREWARD pipeline ...\n\n")
+		t = time.time()		
 		reward = task(directory,'reward')
 		reward.run()
+		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
-	if len(opt_list) == 0 or "-resting1" in opt_list:
+	if check_sequence(opt_list,directory,"resting1"):
 		log.info("\n\nRESTING1 pipeline ...\n\n")
+		t = time.time()		
 		resting1 = resting(directory,'resting1')
 		resting1.run()
+		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
-	# do resting2
-	if len(opt_list) == 0 or "-resting2" in opt_list:
+	if check_sequence(opt_list,directory,"resting2"):
 		log.info("\n\nRESTING2 pipeline ...\n\n")
+		t = time.time()		
 		resting2 = resting(directory,'resting2')
 		resting2.run()
-	
-	# do asl
-	if len(opt_list) == 0 or "-asl" in opt_list:
+		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
+		
+	if check_sequence(opt_list,directory,"asl"):
 		log.info("\n\nASL pipeline ...\n\n")
+		t = time.time()		
 		asl = asl(directory,'asl')
 		asl.run()
+		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
+	
+	if check_sequence(opt_list,directory,"flt"):
+		log.info("\n\nFLT pipeline ...\n\n")
+		t = time.time()		
+		flt = flt(directory,"flt")
+		flt.run()
+		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 		
 	log.info("\n\npipeline complete\n\n")
