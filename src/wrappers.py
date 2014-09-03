@@ -470,3 +470,82 @@ class FLT(CommandLine):
 		outputs = self.output_spec().get()
 		outputs['out_file'] = self.inputs.out_file
 		return outputs
+
+
+############################################################################
+class CorrelateROIsInputSpec(BaseInterfaceInputSpec): 
+	in_files =  InputMultiPath(File(exists=True),desc='Lis of 1D text files with timeseries of averages',mandatory=True)
+	roi_names = traits.List(traits.String(),desc='List of ROI names',mandatory=True)
+	task_name = traits.String("",desc='Task Name')
+	out_file = File(value='output.csv',desc='Generated CSV file with Z-Scores',usedefault=True, genfile=True, hash_files=False)
+
+class CorrelateROIsOutputSpec(TraitedSpec):
+	out_file = File(exists=True, desc='Generated CSV file with Z-Scores')
+	
+"""
+	Nuisance Filtering
+"""
+class CorrelateROIs(BaseInterface):
+	"""
+	Run nuisance code
+
+	"""
+	input_spec = CorrelateROIsInputSpec
+	output_spec = CorrelateROIsOutputSpec
+	
+	def _run_interface(self, runtime):
+		from nipype.interfaces.spm.base import scans_for_fname,scans_for_fnames
+		from nipype.utils.filemanip import filename_to_list,list_to_filename
+
+		# setup parameters
+		d = dict()
+		d['in_files'] = str(self.inputs.in_files).replace("[", "{").replace("]","}")
+		d['roi_names']  = str(self.inputs.roi_names).replace("[", "{").replace("]","}")
+		d['task_name']  = str(self.inputs.task_name)
+		d['out_file'] = str(self.inputs.out_file)
+		
+		myscript = Template("""
+		warning('off','all');
+		
+		in_files = $in_files;
+		roi_names = $roi_names;
+		task_name = '$task_name';
+		out_file = '$out_file';
+		
+		% sanity check
+		if length(roi_names) ~= length(in_files)
+			fprint('Error: number of 1D average files not the same as their names');
+			exit;
+		end
+		
+		% import 1D ROI average files into N vectors
+		roi_img = cell(1,length(in_files));
+		for i=1:length(in_files)          
+			roi_img{i} = importdata(in_files{i});
+		end
+		
+		% calculate Z-scores
+		fid = fopen(out_file, 'wt');
+		for i=1:length(roi_img)  
+			for j=1:length(roi_img)   
+				if i ~= j                   
+ 					z=atanh(corr(roi_img{i},roi_img{j}));
+ 					fprintf(fid,'%s,%s_%s,%d,N/A,Z_Score\\n',task_name,roi_names{i},roi_names{j},z);
+				end
+			end
+		end
+		fclose(fid);
+
+       	
+       	exit;
+		""").substitute(d)
+		mlab = MatlabCommand(script=myscript, mfile=True)
+		result = mlab.run()
+		return result.runtime
+
+	def _list_outputs(self):
+		outputs = self._outputs().get()
+		outputs['out_file'] = os.getcwd()+"/"+self.inputs.out_file
+		return outputs	
+
+

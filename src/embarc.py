@@ -11,7 +11,148 @@ import re
 bin_dir = os.path.dirname(os.path.realpath(__file__))
 OASIS_template = bin_dir+"/../validation/templates/OASIS-30_Atropos_template_in_MNI152_2mm.nii.gz"
 OASIS_labels = bin_dir+"/../validation/templates/OASIS-TRT-20_jointfusion_DKT31_CMA_labels_in_MNI152_2mm.nii.gz"
-ROI_dir = bin_dir+"/../validation/ROI_EMBARC_scaled2mm/"
+ROI_dir = bin_dir+"/../validation/OASIS_rois/"
+ROI_suffix = "_oasis.nii"
+
+
+
+########################
+## predefine all ROIs ##
+########################
+ROI_white = ROI_dir+"white_matter_mask"+ROI_suffix
+ROI_L_insula = ROI_dir+"left_insula"+ROI_suffix
+ROI_R_insula = ROI_dir+"right_insula"+ROI_suffix
+ROI_L_amyg = ROI_dir+"left_amygdala"+ROI_suffix
+ROI_R_amyg = ROI_dir+"left_amygdala"+ROI_suffix
+ROI_VS_L = ROI_dir+"left_accumbens_area"+ROI_suffix
+ROI_VS_R = ROI_dir+"right_accumbens_area"+ROI_suffix
+ROI_VS_LR = ROI_dir+"bilateral_accumbens_area"+ROI_suffix
+ROI_BA9_L = ROI_dir+"left_rostral_middle_frontal"+ROI_suffix
+ROI_BA9_R = ROI_dir+"right_rostral_middle_frontal"+ROI_suffix
+ROI_BA10 = ROI_dir+"medial_brodmann_area_10"+ROI_suffix
+ROI_BR1 = ROI_dir+"beckmann_region_1"+ROI_suffix
+ROI_BR2 = ROI_dir+"beckmann_region_2"+ROI_suffix
+ROI_BR3 = ROI_dir+"beckmann_region_3"+ROI_suffix
+ROI_BR4 = ROI_dir+"beckmann_region_4"+ROI_suffix
+ROI_BR9 = ROI_dir+"beckmann_region_9"+ROI_suffix 
+ROI_PG_ACC = ROI_dir+"pregenual_ACC"+ROI_suffix
+ROI_D_ACC = ROI_dir+"dorsal_ACC"+ROI_suffix
+ROI_SG_ACC = ROI_dir+"subgenual_ACC"+ROI_suffix
+ROI_L_MFG_compensate = ROI_dir+"left_anterior_MFG_compensate"+ROI_suffix
+ROI_R_MFG_compensate = ROI_dir+"right_anterior_MFG_compensate"+ROI_suffix
+ROI_L_VLPFC = ROI_dir+"left_brodmann_area_47"+ROI_suffix
+ROI_R_VLPFC = ROI_dir+"right_brodmann_area_47"+ROI_suffix
+ROI_L_ant_insula =	ROI_dir+"left_anterior_insula"+ROI_suffix
+ROI_R_ant_insula = ROI_dir+"right_anterior_insula"+ROI_suffix
+ROI_putamen_L = ROI_dir+"left_putamen"+ROI_suffix
+ROI_putamen_R = ROI_dir+"right_putamen"+ROI_suffix
+ROI_caudate_body_L = ROI_dir+"left_caudate"+ROI_suffix
+ROI_caudate_body_R = ROI_dir+"right_caudate"+ROI_suffix
+ROI_caudate_head_L = ROI_dir+"left_caudate"+ROI_suffix
+ROI_caudate_head_R = ROI_dir+"right_caudate"+ROI_suffix
+
+#NOTE: caudate_body and head map to the same thing
+
+
+########################
+
+
+
+# 
+#ROI_dir = bin_dir+"/../validation/ROI_EMBARC_scaled2mm/"
+#ROI_suffix = ".img"
+#ROI_dir = bin_dir+"/../validation/OASIS_ROIs/"
+#
+#
+#ROI_white = ROI_dir+"white_test3.nii"
+#ROI_L_insula = ROI_dir+'L_insula_2mm'+ROI_suffix
+#ROI_R_insula = ROI_dir+'R_insula_2mm'+ROI_suffix
+#ROI_L_amyg = ROI_dir+'L_amyg_2mm'+ROI_suffix
+#ROI_R_amyg = ROI_dir+'R_amyg_2mm'+ROI_suffix
+#ROI_VS_L = ROI_dir+'VS_left_2mm'+ROI_suffix
+#ROI_VS_R = ROI_dir+'VS_right_2mm'+ROI_suffix
+#ROI_BA9_L = ROI_dir+'BA09_left_2mm'+ROI_suffix
+#ROI_BA9_R = ROI_dir+'BA09_right_2mm'+ROI_suffix
+#ROI_BR1 = ROI_dir+'BR1_2mm'+ROI_suffix
+#ROI_BR2 = ROI_dir+'BR2_2mm'+ROI_suffix
+#ROI_BR3 = ROI_dir+'BR3_2mm'+ROI_suffix
+#ROI_BR4 = ROI_dir+'BR4_2mm'+ROI_suffix
+#ROI_BR9 = ROI_dir+'BR9_2mm'+ROI_suffix 
+#ROI_PG_ACC = ROI_dir+"pgACC_2mm"+ROI_suffix
+#ROI_D_ACC = ROI_dir+"dACC_2mm"+ROI_suffix
+#ROI_SG_ACC = ROI_dir+"sgACC_2mm"+ROI_suffix
+#ROI_L_MFG_COMPENSATE = ROI_dir+"L_MFG_compensate_2mm"+ROI_suffix)
+#ROI_R_MFG_COMPENSATE = ROI_dir+"R_MFG_compensate_2mm"+ROI_suffix)
+#ROI_BA10 = ROI_dir+"BA10_5mm"+ROI_suffix
+#ROI_L_VLPFC = ROI_dir+"Left_VLPFC_5mm"+ROI_suffix
+#ROI_R_VLPFC = ROI_dir+"Right_VLPFC_5mm"+ROI_suffix
+#ROI_VS_LR = ROI_dir+"VS_L&R.nii"
+#ROI_L_ant_insula =	ROI_dir+"L_ant_insula"+ROI_suffix
+#ROI_R_ant_insula = ROI_dir+"R_ant_insula"+ROI_suffix
+#ROI_putamen_L = ROI_dir+"putamen_left"+ROI_suffix
+#ROI_putamen_R = ROI_dir+"putamen_right"+ROI_suffix
+#ROI_caudate_body_L = ROI_dir+"caudate_body_left"+ROI_suffix
+#ROI_caudate_body_R = ROI_dir+"caudate_body_right"+ROI_suffix
+#ROI_caudate_head_L = ROI_dir+"caudate_head_left"+ROI_suffix
+#ROI_caudate_head_R = ROI_dir+"caudate_head_right"+ROI_suffix
+
+
+
+
+
+"""
+EMBARC get subject name from a directory
+"""
+def get_subject(directory):
+	m = re.search('embarc_CU_([A-Z0-9]+_\dR\d)_mri',directory)
+	if m:
+		return m.group(1)
+	return "subject"
+
+"""
+EMBARC 1.0 Input Data Source
+"""
+def datasource(directory, sequence):
+	import nipype.pipeline.engine as pe          # pypeline engine
+	import nipype.interfaces.io as nio           # Data i/o
+
+	# define some variables beforehand
+	subject=get_subject(directory)
+	
+	# func template
+	func_template = 'dicom_bold_%s/%s_bold_%s.nii'
+	if sequence == 'asl':
+		func_template = 'dicom_%s/%s_%s_*.nii'
+
+	# define templates for datasource
+	field_template = dict(func=func_template,
+                          struct='dicom_anatomical/%s_anatomical.nii')
+	template_args  = dict(func=[['sequence','subject_id','sequence']],
+    					  struct=[['subject_id']])                
+
+	# add behavior file to task oriented design
+	if sequence == 'ert' or sequence == 'reward':
+		field_template['behav'] = 'dicom_bold_%s/eprime_%s.txt'
+		template_args['behav']  = [['sequence','sequence']]
+
+	# specify input dataset just pass through parameters
+	datasource = pe.Node(interface=nio.DataGrabber(
+						 infields=['subject_id','sequence'], 
+						 outfields=['func', 'struct','behav']),
+	                     name = 'datasource')
+	datasource.inputs.base_directory = os.path.abspath(directory)
+	datasource.inputs.template = '*'
+	datasource.inputs.field_template = field_template
+	datasource.inputs.template_args  = template_args
+	datasource.inputs.subject_id = subject
+	datasource.inputs.sequence = sequence
+	datasource.inputs.sort_filelist = True
+
+	return datasource
+
+def subset(x,i):
+	return x[i]	
+
 
 """
 EMBARC 1.5 PreProcessing Pipeline
@@ -113,7 +254,7 @@ def preprocess():
 	warp_f2t  = pe.Node(interface=fsl.ApplyWarp(), name='warp_func2template')	
 	warp_f2t.inputs.ref_file = template
 	
-	warp_s2t  = pe.Node(interface=fsl.ApplyWarp(), name='warp_structtemplate')	
+	warp_s2t  = pe.Node(interface=fsl.ApplyWarp(), name='warp_struct2template')	
 	warp_s2t.inputs.ref_file = template
 	
 	susan = pe.Node(interface=fsl.SUSAN(), name="smooth")
@@ -144,7 +285,8 @@ def preprocess():
 		           	 (struct_bet,sxfm,[('out_file','in_file')]),
 		             (flirt,sxfm,[('out_matrix_file','in_matrix_file')]),
 		           
-					 (sxfm,fnirt_s2t,[('out_file','in_file')]),
+					 #(sxfm,fnirt_s2t,[('out_file','in_file')]),
+					 (inputnode,fnirt_s2t,[('struct','in_file')]),
 		             (xfm,warp_f2t,[('out_file','in_file')]),
 		             (fnirt_s2t,warp_f2t,[('field_file','field_file')]),
 		             
@@ -314,63 +456,15 @@ def level1analysis(pppi):
 		              		              			('spmT_images','spmT_images')])])
 	return l1analysis		             
 
-"""
-EMBARC get subject name from a directory
-"""
-def get_subject(directory):
-	m = re.search('embarc_CU_([A-Z0-9]+_\dR\d)_mri',directory)
-	if m:
-		return m.group(1)
-	return "subject"
-
-"""
-EMBARC 1.0 Input Data Source
-"""
-def datasource(directory, sequence):
-	import nipype.pipeline.engine as pe          # pypeline engine
-	import nipype.interfaces.io as nio           # Data i/o
-
-	# define some variables beforehand
-	subject=get_subject(directory)
-	
-	# func template
-	func_template = 'dicom_bold_%s/%s_bold_%s.nii'
-	if sequence == 'asl':
-		func_template = 'dicom_%s/%s_%s_*.nii'
-
-	# define templates for datasource
-	field_template = dict(func=func_template,
-                          struct='dicom_anatomical/%s_anatomical.nii')
-	template_args  = dict(func=[['sequence','subject_id','sequence']],
-    					  struct=[['subject_id']])                
-
-	# add behavior file to task oriented design
-	if sequence == 'ert' or sequence == 'reward':
-		field_template['behav'] = 'dicom_bold_%s/eprime_%s.txt'
-		template_args['behav']  = [['sequence','sequence']]
-
-	# specify input dataset just pass through parameters
-	datasource = pe.Node(interface=nio.DataGrabber(
-						 infields=['subject_id','sequence'], 
-						 outfields=['func', 'struct','behav']),
-	                     name = 'datasource')
-	datasource.inputs.base_directory = os.path.abspath(directory)
-	datasource.inputs.template = '*'
-	datasource.inputs.field_template = field_template
-	datasource.inputs.template_args  = template_args
-	datasource.inputs.subject_id = subject
-	datasource.inputs.sequence = sequence
-	datasource.inputs.sort_filelist = True
-
-	return datasource
-
-def subset(x,i):
-	return x[i]	
 
 """
 EMBARC 1.0 Task Sequence Ex: ert/reward
+directory - dataset directory
+sequence  - name of the sequence (ert/reward)
+subject   - optional subject name if None, embarc subject will be derived
+ds		  - DataSource node for this dataset, if None embarc will be used
 """
-def task(directory,sequence):
+def task(directory,sequence,subject = None, ds = None):
 	import nipype.pipeline.engine as pe          # pypeline engine
 	import wrappers as wrap
 	import nipype.interfaces.spm as spm          # spm
@@ -383,13 +477,15 @@ def task(directory,sequence):
 	base_dir = os.path.abspath(directory+"/analysis/")
 	if not os.path.exists(base_dir):
 		os.makedirs(base_dir)
-	subject = get_subject(directory)
+	if subject is None:
+		subject = get_subject(directory)
 	out_dir = os.path.abspath(directory+"/output/"+sequence)
 	if not os.path.exists(out_dir):
 		os.makedirs(out_dir)
 		
 	# get components
-	ds = datasource(directory,sequence)
+	if ds is None:
+		ds = datasource(directory,sequence)
 	pp = preprocess()
 	l1 = level1analysis(False);
 	l2 = level1analysis(True);
@@ -420,66 +516,66 @@ def task(directory,sequence):
 		task_units = "ParameterEstimate"
 		l1_names = ["iI_cI","conflict"]
 		# 1st level ROIs
-		l1_rois = [[("LeftAmygdala_iI_minus_cI",ROI_dir+"L_amyg_2mm.img"),
-					("RightAmygdala_iI_minus_cI",ROI_dir+"R_amyg_2mm.img"),
-					("LeftInsula_iI_minus_cI",ROI_dir+"L_insula_2mm.img"),
-					("RightInsula_iI_minus_cI",ROI_dir+"R_insula_2mm.img"),
-					("pgCing_iI_minus_cI",ROI_dir+"pgACC_2mm.img"),
-					("dCing_iI_minus_cI",ROI_dir+"dACC_2mm.img"),
-					("sgCing_iI_minus_cI",ROI_dir+"sgACC_2mm.img"),
-					("LeftMFG_iI_minus_cI",ROI_dir+"L_MFG_compensate_2mm.img"),
-					("RightMFG_iI_minus_cI",ROI_dir+"R_MFG_compensate_2mm.img")],
+		l1_rois = [[("LeftAmygdala_iI_minus_cI",ROI_L_amyg),
+					("RightAmygdala_iI_minus_cI",ROI_R_amyg),
+					("LeftInsula_iI_minus_cI",ROI_L_insula),
+					("RightInsula_iI_minus_cI",ROI_R_insula),
+					("pgCing_iI_minus_cI",ROI_PG_ACC),
+					("dCing_iI_minus_cI",ROI_D_ACC),
+					("sgCing_iI_minus_cI",ROI_SG_ACC),
+					("LeftMFG_iI_minus_cI",ROI_L_MFG_compensate),
+					("RightMFG_iI_minus_cI",ROI_R_MFG_compensate)],
 					
-				   [("LeftAmyg_I_minus_C",ROI_dir+"L_amyg_2mm.img"),
-					("RightAmyg_I_minus_C",ROI_dir+"R_amyg_2mm.img"),
-					("LeftInsula_I_minus_C",ROI_dir+"L_insula_2mm.img"),
-					("RightInsula_I_minus_C",ROI_dir+"R_insula_2mm.img"),
-					("pgCing_I_minus_C",ROI_dir+"pgACC_2mm.img"),
-					("dCing_I_minus_C",ROI_dir+"dACC_2mm.img"),
-					("sgCing_I_minus_C",ROI_dir+"sgACC_2mm.img")]]
+				   [("LeftAmyg_I_minus_C",ROI_L_amyg),
+					("RightAmyg_I_minus_C",ROI_R_amyg),
+					("LeftInsula_I_minus_C",ROI_L_insula),
+					("RightInsula_I_minus_C",ROI_R_insula),
+					("pgCing_I_minus_C",ROI_PG_ACC),
+					("dCing_I_minus_C",ROI_D_ACC),
+					("sgCing_I_minus_C",ROI_SG_ACC)]]
 		# ROIs for PPI
-		rois = [("ER_pgACC",ROI_dir+"pgACC_2mm.img",
-					[("LeftAmyg_iI_minus_cI_pgAcc_PPI",ROI_dir+"L_amyg_2mm.img"),
-					 ("RightAmyg_iI_minus_cI_pgAcc_PPI",ROI_dir+"R_amyg_2mm.img")]),
-				("ER_L_amyg",ROI_dir+"L_amyg_2mm.img",
-					[("pgCing_iI_minus_cI_LAmyg_PPI",ROI_dir+"pgACC_2mm.img"),
-					 ("dCing_iI_minus_cI_LAmyg_PPI",ROI_dir+"dACC_2mm.img"),
-					 ("sgCing_iI_minus_cI_LAmyg_PPI",ROI_dir+"sgACC_2mm.img")]),
-				("ER_R_amyg",ROI_dir+"R_amyg_2mm.img",
-					[("pgCing_iI_minus_cI_RAmyg_PPI",ROI_dir+"pgACC_2mm.img"),
-					 ("dCing_iI_minus_cI_RAmyg_PPI",ROI_dir+"dACC_2mm.img"),
-					 ("sgCing_iI_minus_cI_RAmyg_PPI",ROI_dir+"sgACC_2mm.img")])]				
+		rois = [("ER_pgACC",ROI_PG_ACC,
+					[("LeftAmyg_iI_minus_cI_pgAcc_PPI",ROI_L_amyg),
+					 ("RightAmyg_iI_minus_cI_pgAcc_PPI",ROI_R_amyg)]),
+				("ER_L_amyg",ROI_L_amyg,
+					[("pgCing_iI_minus_cI_LAmyg_PPI",ROI_PG_ACC),
+					 ("dCing_iI_minus_cI_LAmyg_PPI",ROI_D_ACC),
+					 ("sgCing_iI_minus_cI_LAmyg_PPI",ROI_SG_ACC)]),
+				("ER_R_amyg",ROI_R_amyg,
+					[("pgCing_iI_minus_cI_RAmyg_PPI",ROI_PG_ACC),
+					 ("dCing_iI_minus_cI_RAmyg_PPI",ROI_D_ACC),
+					 ("sgCing_iI_minus_cI_RAmyg_PPI",ROI_SG_ACC)])]				
 
 	elif sequence == 'reward':
 		task_name = "RewardTask"
 		task_units = "ParameterEstimate"
 		l1_names = ["anticipation","outcome"]
-		l1_rois = [[("BA10_anticipation",ROI_dir+"BA10_5mm.img"),
-					("LeftBA9_anticipation",ROI_dir+"BA09_left_2mm.img"),
-					("RightBA9_anticipation",ROI_dir+"BA09_right_2mm.img"),
-					("LeftVS_anticipation",ROI_dir+"VS_left_2mm.img"),
-					("RightVS_anticipation",ROI_dir+"VS_right_2mm.img"),
-					("LeftBA47_anticipation",ROI_dir+"Left_VLPFC_5mm.img"),
-					("RightBA47_anticipation",ROI_dir+"Right_VLPFC_5mm.img"),
-					("BR1_anticipation",ROI_dir+"BR1_2mm.img"),
-					("BR2_anticipation",ROI_dir+"BR2_2mm.img"),
-					("BR3_anticipation",ROI_dir+"BR3_2mm.img"),
-					("BR4_anticipation",ROI_dir+"BR4_2mm.img")],
+		l1_rois = [[("BA10_anticipation",ROI_BA10),
+					("LeftBA9_anticipation",ROI_BA9_L),
+					("RightBA9_anticipation",ROI_BA9_R),
+					("LeftVS_anticipation",ROI_VS_L),
+					("RightVS_anticipation",ROI_VS_R),
+					("LeftBA47_anticipation",ROI_L_VLPFC),
+					("RightBA47_anticipation",ROI_R_VLPFC),
+					("BR1_anticipation",ROI_BR1),
+					("BR2_anticipation",ROI_BR2),
+					("BR3_anticipation",ROI_BR3),
+					("BR4_anticipation",ROI_BR4)],
 					
-				   [("LeftBA9_outcome",ROI_dir+"BA09_left_2mm.img"),
-					("RightBA9_outcome",ROI_dir+"BA09_right_2mm.img"),
-					("LeftVS_outcome",ROI_dir+"VS_left_2mm.img"),
-					("RightVS_outcome",ROI_dir+"VS_right_2mm.img"),
-					("BR1_outcome",ROI_dir+"BR1_2mm.img"),
-					("BR2_outcome",ROI_dir+"BR2_2mm.img"),
-					("BR3_outcome",ROI_dir+"BR3_2mm.img"),
-					("BR4_outcome",ROI_dir+"BR4_2mm.img")]]
+				   [("LeftBA9_outcome",ROI_BA9_L),
+					("RightBA9_outcome",ROI_BA9_R),
+					("LeftVS_outcome",ROI_VS_L),
+					("RightVS_outcome",ROI_VS_R),
+					("BR1_outcome",ROI_BR1),
+					("BR2_outcome",ROI_BR2),
+					("BR3_outcome",ROI_BR3),
+					("BR4_outcome",ROI_BR4)]]
 		# ROIs for PPI
-		rois = [("Reward_VS",ROI_dir+"VS_L&R.nii",
-					[("BR1_anticipation_PPI",ROI_dir+"BR1_2mm.img"),
-					 ("BR2_anticipation_PPI",ROI_dir+"BR2_2mm.img"),
-					 ("BR3_anticipation_PPI",ROI_dir+"BR3_2mm.img"),
-					 ("BR4_anticipation_PPI",ROI_dir+"BR4_2mm.img")])]
+		rois = [("Reward_VS",ROI_VS_LR,
+					[("BR1_anticipation_PPI",ROI_BR1),
+					 ("BR2_anticipation_PPI",ROI_BR2),
+					 ("BR3_anticipation_PPI",ROI_BR3),
+					 ("BR4_anticipation_PPI",ROI_BR4)])]
 			
 	datasink = pe.Node(nio.DataSink(), name='datasink')
 	datasink.inputs.base_directory = out_dir
@@ -588,10 +684,16 @@ def task(directory,sequence):
 	return task
 
 
+
 """
 EMBARC 1.0 Resting Sequence Ex: resting1/resting2
+directory - dataset directory
+sequence  - name of the sequence
+subject   - optional subject name if None, embarc subject will be derived
+ds		  - DataSource node for this dataset, if None embarc will be used
+
 """
-def resting(directory,sequence):
+def resting(directory,sequence,subject = None,ds = None):
 	import nipype.pipeline.engine as pe          # pypeline engine
 	import CPAC									 # import CPAC nuisance
 	import nipype.interfaces.fsl as fsl          # fsl
@@ -608,13 +710,32 @@ def resting(directory,sequence):
 	out_dir = os.path.abspath(directory+"/output/"+sequence)
 	if not os.path.exists(out_dir):
 		os.makedirs(out_dir)
-	subject = get_subject(directory)
+	if subject is None:
+		subject = get_subject(directory)
 	
 	# get components
-	ds = datasource(directory,sequence)
+	if ds is None:
+		ds = datasource(directory,sequence)
+	
+	
+	# setup some constants
+	task_name = "Resting_First_Block"
+	if sequence == 'resting2':
+		task_name = "Resting_Second_Block"
+		
+	task_units = "Z_Score"
+	resting_roi_names = ['LeftInsula','RightInsula','LeftAmygdala',
+						'RightAmygdala','LeftVS','RightVS','LeftBA9','RightBA9',
+						'BR1','BR2','BR3','BR4','BR9']
+	resting_roi_images = [ROI_L_insula,ROI_R_insula,ROI_L_amyg,ROI_R_amyg,
+						  ROI_VS_L,ROI_VS_R,ROI_BA9_L,ROI_BA9_R,
+						  ROI_BR1,ROI_BR2,ROI_BR3,ROI_BR4,ROI_BR9]
+	
+	
+	
 	pp = preprocess()
 	nu = pe.Node(interface=wrap.Nuisance(), name="nuisance")
-	nu.inputs.white_mask = ROI_dir+"white_test3.nii"
+	nu.inputs.white_mask = ROI_white
 	glm = pe.Node(interface=fsl.GLM(), name="glm")
 	glm.inputs.out_res_name = "residual.4d.nii"
 	filt = pe.Node(interface=fsl.ImageMaths(), name="filter")
@@ -636,40 +757,32 @@ def resting(directory,sequence):
 	nc.inputs.inputspec.template = OASIS_labels
 	zscore =  CPAC.network_centrality.get_zscore(wf_name='z_score')
 	
+	sca = dict()
+	maskave = dict()
+	gunzip = dict()
 	
-	sca = CPAC.sca.create_sca(name_sca='sca');
-	#tonifti = pe.Node(interface=misc.CreateNifti(),name="to_nifti")
-	#tonifti.inputs.data_file = ROI_dir+'L_insula_2mm.img'
-	#tonifti.inputs.header_file = ROI_dir+'L_insula_2mm.hdr'
+	for mask in ["BR9","LeftVS","RightVS"]:
+		sca[mask] = CPAC.sca.create_sca(name_sca="sca_"+mask);
+		maskave[mask] = pe.Node(interface=afni.Maskave(),name="roi_ave_"+mask)
+		maskave[mask].inputs.outputtype = "NIFTI"
+		maskave[mask].inputs.quiet= True
+		maskave[mask].inputs.mask = resting_roi_images[resting_roi_names.index(mask)]
+		gunzip[mask] = pe.Node(interface=misc.Gunzip(),name="gunzip_"+mask)
 	
-	maskave = pe.Node(interface=afni.Maskave(),name="mask_ave")
-	maskave.inputs.outputtype = "NIFTI"
-	maskave.inputs.quiet= True
-	gunzip = pe.Node(interface=misc.Gunzip(),name="gunzip")
-	
-	#maskave.inputs.mask = ROI_dir+'L_insula_2mm.img'
-	
-	task_name = "Resting_First_Block"
-	if sequence == 'resting2':
-		task_name = "Resting_Second_Block"
-		
-	task_units = "Z_Score"
-	resting_roi_names = ['LeftInsula','RightInsula','LeftAmygdala',
-						'RightAmygdala','LeftVS','RightVS','LeftBA9','RightBA9',
-						'BR1','BR2','BR3','BR4','BR9']
-	resting_roi_images = [ROI_dir+'L_insula_2mm.img',ROI_dir+'R_insula_2mm.img',
-					ROI_dir+'L_amyg_2mm.img',ROI_dir+'R_amyg_2mm.img',
-					ROI_dir+'VS_left_2mm.img',ROI_dir+'VS_right_2mm.img',
-					ROI_dir+'BA09_left_2mm.img',ROI_dir+'BA09_right_2mm.img',
-					ROI_dir+'BR1_2mm.img',ROI_dir+'BR2_2mm.img',
-					ROI_dir+'BR3_2mm.img',ROI_dir+'BR4_2mm.img',
-					ROI_dir+'BR9_2mm.img' ]
-	
+	roiave = pe.MapNode(interface=afni.Maskave(),name="roi_ave",iterfield="mask")
+	roiave.inputs.outputtype = "NIFTI"
+	roiave.inputs.mask = resting_roi_images
+	roiave.inputs.quiet= True
+
+	corroi = pe.Node(interface=wrap.CorrelateROIs(),name="corr_roi")
+	corroi.inputs.roi_names = resting_roi_names
+	corroi.inputs.task_name = task_name
+	corroi.inputs.out_file = subject+"_"+sequence+"_outcomes_CORR.csv"
 
 	extract = dict()
 	save_csv = dict()
 	
-	for nm in ["ALFF","ReHO","NC","SCA"]: 
+	for nm in ["ALFF","ReHO","NC","SCA_BR9","SCA_LeftVS","SCA_RightVS"]: 
 		ext = pe.Node(interface=wrap.ROIExtractor(),name="extract_"+nm)
 		ext.inputs.roi_images = resting_roi_images
 		ext.inputs.average = 'none'
@@ -684,8 +797,6 @@ def resting(directory,sequence):
 		csv.inputs.names = [nm+"_"+ s for s in resting_roi_names]
 		csv.inputs.output = subject+"_"+sequence+"_outcomes_"+nm+".csv"
 		save_csv[nm] = csv
-	
-	
 	
 	datasink = pe.Node(nio.DataSink(), name='datasink')
 	datasink.inputs.base_directory = out_dir
@@ -702,6 +813,9 @@ def resting(directory,sequence):
 	task.connect(pp,"output.func",glm,"in_file")
 	task.connect(glm,"out_res",filt,"in_file")
 	
+	task.connect(filt,"out_file",roiave,"in_file")
+	task.connect(roiave,"out_file",corroi,"in_files")
+		
 	task.connect(glm,'out_res',alff,'inputspec.rest_res')
 	task.connect(pp,'output.mask',alff,'inputspec.rest_mask')	
 
@@ -712,13 +826,18 @@ def resting(directory,sequence):
 	task.connect(nc,'outputspec.centrality_outputs',zscore,'inputspec.input_file')
 	task.connect(pp,'output.mask',zscore,'inputspec.mask_file')
 
-	task.connect(filt,"out_file",maskave,"in_file")
-	task.connect(pp,"output.mask",maskave,"mask")
-	#task.connect(tonifti,"nifti_file",maskave,"mask")
-	
-	task.connect(filt,"out_file",sca,"inputspec.functional_file")
-	task.connect(maskave,"out_file",sca,"inputspec.timeseries_one_d")
-	
+	for mask in ["BR9","LeftVS","RightVS"]:
+		task.connect(filt,"out_file",maskave[mask],"in_file")
+		#task.connect(pp,"output.mask",maskave,"mask")
+		task.connect(filt,"out_file",sca[mask],"inputspec.functional_file")
+		task.connect(maskave[mask],"out_file",sca[mask],"inputspec.timeseries_one_d")
+		task.connect(sca[mask],("outputspec.Z_score",subset,0),gunzip[mask],'in_file')
+		task.connect(gunzip[mask],"out_file",extract["SCA_"+mask],'source')
+		task.connect(sca[mask],"outputspec.Z_score",datasink,"data.sca."+mask)
+		task.connect(extract["SCA_"+mask],"mat_file",save_csv["SCA_"+mask],"ext")
+		task.connect(save_csv["SCA_"+mask],"csv_file",datasink,"csv.@par"+mask)
+
+
 	task.connect(alff,"outputspec.alff_Z_img",extract["ALFF"],'source')
 	task.connect(extract["ALFF"],"mat_file",save_csv["ALFF"],"ext")
 
@@ -728,19 +847,14 @@ def resting(directory,sequence):
 	task.connect(zscore,("outputspec.z_score_img",subset,0),extract["NC"],'source')
 	task.connect(extract["NC"],"mat_file",save_csv["NC"],"ext")
 	
-	task.connect(sca,("outputspec.Z_score",subset,0),gunzip,'in_file')
-	task.connect(gunzip,"out_file",extract["SCA"],'source')
-	
-	task.connect(extract["SCA"],"mat_file",save_csv["SCA"],"ext")
-	
 	task.connect(save_csv["ALFF"],"csv_file",datasink,"csv.@par1")
 	task.connect(save_csv["ReHO"],"csv_file",datasink,"csv.@par2")
 	task.connect(save_csv["NC"],"csv_file",datasink,"csv.@par3")
-	task.connect(save_csv["SCA"],"csv_file",datasink,"csv.@par4")
-
+	#task.connect(save_csv["SCA_RightVS"],"csv_file",datasink,"csv.@par4")
+	task.connect(corroi,"out_file",datasink,"csv.@par5")
 	task.connect(alff,"outputspec.alff_Z_img",datasink,"data.alff")
 	task.connect(reho,"outputspec.z_score",datasink,"data.reho")
-	task.connect(sca,"outputspec.Z_score",datasink,"data.sca")
+	
 	task.connect(zscore,"outputspec.z_score_img",datasink,"data.nc")
 	task.connect(pp,"output.func",datasink,"data.functional")
 	task.connect(pp,"output.struct",datasink,"data.structural")
@@ -778,7 +892,7 @@ def imcalc_expression(x):
 	return "i1/"+str(x)	
 
 
-def flt(directory,sequence):
+def flt(directory,sequence,subject):
 	import nipype.interfaces.base as base
 	import wrappers as wrap
 	import nipype.pipeline.engine as pe          # pypeline engine
@@ -790,7 +904,8 @@ def flt(directory,sequence):
 	out_dir = os.path.abspath(directory+"/output/"+sequence)
 	if not os.path.exists(out_dir):
 		os.makedirs(out_dir)
-	subject = get_subject(directory)
+	if subject is None:
+		subject = get_subject(directory)
 		
 	work = pe.Workflow(name=sequence)
 	work.base_dir = base_dir
@@ -810,7 +925,7 @@ def flt(directory,sequence):
 """
 EMBARC 2.0 ASL Sequence
 """
-def asl(directory,sequence):
+def asl(directory,sequence,subject = None,ds = None):
 	import wrappers as wrap
 	import nipype.pipeline.engine as pe          # pypeline engine
 	import nipype.interfaces.spm as spm 
@@ -827,10 +942,12 @@ def asl(directory,sequence):
 	out_dir = os.path.abspath(directory+"/output/"+sequence)
 	if not os.path.exists(out_dir):
 		os.makedirs(out_dir)
-	subject = get_subject(directory)
+	if subject is None:	
+		subject = get_subject(directory)
 	
 	# get components
-	ds = datasource(directory,sequence)
+	if ds is None:
+		ds = datasource(directory,sequence)
 	#pp = preprocess()
 
 	realign = pe.Node(interface=spm.Realign(), name="realign")
@@ -898,7 +1015,7 @@ def asl(directory,sequence):
 	warp_f2t  = pe.Node(interface=fsl.ApplyWarp(), name='warp_func2template')	
 	warp_f2t.inputs.ref_file = OASIS_template
 	
-	warp_s2t  = pe.Node(interface=fsl.ApplyWarp(), name='warp_structtemplate')	
+	warp_s2t  = pe.Node(interface=fsl.ApplyWarp(), name='warp_struct2template')	
 	warp_s2t.inputs.ref_file = OASIS_template
 		
 	
@@ -909,33 +1026,14 @@ def asl(directory,sequence):
 
 	imcalc = pe.Node(interface=wrap.ImageCalc(), name="imcalc")
 	
-	rois = [ROI_dir+"BA10_5mm.img",
-			ROI_dir+"BR1.nii",
-			ROI_dir+"BR2.nii",
-			ROI_dir+"BR3.nii",
-			ROI_dir+"BR4.nii",
-			ROI_dir+"BR9.nii",
-			ROI_dir+"pgACC_0_42_4_8mm.img",
-			ROI_dir+"sgACC_0_24_-8_8mm.img",
-			ROI_dir+"dACC_0_24_38_8mm.img",
-			ROI_dir+"FIRST_L_amyg_small.nii",
-			ROI_dir+"FIRST_R_amyg_small.nii",
-			ROI_dir+"BA09_left.img",
-			ROI_dir+"BA09_right.img",
-			ROI_dir+"Left_VLPFC_5mm.img",
-			ROI_dir+"Right_VLPFC_5mm.img",
-			ROI_dir+"L_ant_insula.img",
-			ROI_dir+"R_ant_insula.img",
-			ROI_dir+"L_ant_MFG_emoconflict_MDDcompensate_p001.img",
-			ROI_dir+"R_ant_MFG_emoconflict_MDDcompensate_p001.img",
-			ROI_dir+"VS_left.img",
-			ROI_dir+"VS_right.img",
-			ROI_dir+"putamen_left.img",
-			ROI_dir+"putamen_right.img",
-			ROI_dir+"caudate_body_left.img",
-			ROI_dir+"caudate_body_right.img",
-			ROI_dir+"caudate_head_left.img",
-			ROI_dir+"caudate_head_right.img"]
+	rois = [ROI_BA10,ROI_BR1,ROI_BR2,ROI_BR3,ROI_BR4,ROI_BR9,
+			ROI_PG_ACC,ROI_SG_ACC,ROI_D_ACC,ROI_L_amyg,ROI_R_amyg,
+			ROI_BA9_L,ROI_BA9_R,ROI_L_VLPFC,ROI_R_VLPFC,
+			ROI_L_ant_insula,ROI_R_ant_insula,
+			ROI_L_MFG_compensate,ROI_R_MFG_compensate,
+			ROI_VS_L,ROI_VS_R,ROI_putamen_L,
+			ROI_putamen_R,ROI_caudate_body_L,ROI_caudate_body_R,
+			ROI_caudate_head_L,ROI_caudate_head_R]
 	
 	roi_names =['BA10_CBF','BR01_CBF','BR02_CBF','BR03_CBF','BR04_CBF',
 				'BR09_CBF','pgCing_CBF','sgCing_CBF','dCing_CBF','LeftAmygdala_CBF',
@@ -1107,7 +1205,9 @@ if __name__ == "__main__":
 						'log_directory': log_dir},
     		   execution={'stop_on_first_crash': True,
     		   			  'display_variable':disp,
-                      	  'hash_method': 'timestamp'})
+                      	  'hash_method': 'timestamp',
+                      	  'keep_inputs': True,
+                      	  'remove_unnecessary_outputs': False})
 	config.update_config(cfg)
 	nipype.logging.update_logging(config)
 	log = nipype.logging.getLogger('workflow')
