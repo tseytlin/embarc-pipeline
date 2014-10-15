@@ -158,7 +158,7 @@ function out = nuisance(unsmoothed_nii_path,white_mask_roi_path,brain_mask_file_
 	for k = 1:6
 	   spektrum =(fft(m_confounds(:,k)'-mean(m_confounds(:,k)')))/NumScans;
 	   spektrum1 = BPF2.*spektrum;
-	   m_confounds(1:180, k) = real(ifft((spektrum1)));
+	   m_confounds(1:NumScans, k) = real(ifft((spektrum1)));
 	end
 
 	for c = 1:6
