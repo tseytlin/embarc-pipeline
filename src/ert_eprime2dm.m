@@ -505,5 +505,14 @@ function ert_eprime2dm(eprime_file)
 
 	 fclose(fid);
 
+	outputfiles = ([directory,'/',participant,'_ERT_behaviour_full.csv']);
+	fid = fopen(outputfiles, 'wt');
+	
+	for i = 1:16
+		fprintf(fid, '%d\n,', full_behaviour(i));
+	 	
+	 end
 
+
+	 fclose(fid);
 

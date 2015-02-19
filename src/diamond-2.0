@@ -11,8 +11,8 @@ PROG_FILE=`basename $0`
 if [ -z $1 ];
 then
     PROG=`basename $0` 
-    echo "Usage: ${PROG} [-asl|-ert|-reward|-resting1|-resting2|-flt] <dir1> ...[dirN]"
-    echo "Run an EMBARC 2.0 analysis pipeline on the set of subject data directories." 
+    echo "Usage: ${PROG} [-dynamic_faces|-efnback_1|-efnback_2|-reward_1|-reward_2|-resting_state] <dir1> ...[dirN]"
+    echo "Run an DIAMOND 2.0 analysis pipeline on the set of subject data directories." 
 exit 1
 fi
 FLAGS=""
@@ -23,7 +23,7 @@ for DATA_DIR in $@
 do
 
 	# skip some flags
-	if [ $DATA_DIR == "-asl" -o $DATA_DIR == "-reward" -o $DATA_DIR == "-resting1" -o $DATA_DIR == "-resting2" -o $DATA_DIR == "-ert" -o $DATA_DIR == "-flt" ];
+	if [ $DATA_DIR == "-dynamic_faces" -o $DATA_DIR == "-reward_1" -o $DATA_DIR == "-reward_2" -o $DATA_DIR == "-efnback_1" -o $DATA_DIR == "-efnback_2" -o $DATA_DIR == "-resting_state" ];
 	then
 		FLAGS="${FLAGS} ${DATA_DIR}"
 		continue
@@ -31,7 +31,7 @@ do
 	
 	# get some info
 	NAME=`basename $DATA_DIR`
-	USERNAME=`echo $NAME | awk -F '_' '{printf "%s_%s",$3,$4; }'`
+	USERNAME=`echo $NAME | awk -F '.' '{print $2}'`
 	PLACE=`echo $USERNAME | cut -c 1-2`
 	DT=`date`
 	METAFILE=${DATA_DIR}/status.txt
@@ -39,7 +39,7 @@ do
 	DATA_DIR_PATH=`(cd $DATA_DIR;pwd)`
 	
 	# make sure that this is a valid data directory
-	if [ ! -d ${DATA_DIR}/dicom_anatomical ];
+	if [ ! -d ${DATA_DIR}/anat ];
 	then
 		echo "Error: ${DATA_DIR} does not seem to be a valid embarc subject directory" 2>&1 | tee -a $LOG_FILE
 		exit 1;
@@ -66,18 +66,18 @@ do
 	# transfer.subject.N.log
 	# find empty log file
 	i=1
-	LOG_FILE="${LOG_DIR}/embarc.${USERNAME}.${i}.log" 
+	LOG_FILE="${LOG_DIR}/diamond.${USERNAME}.${i}.log" 
 	while [ -e $LOG_FILE ] 
 	do
 	   let "i=i+1"
-	   LOG_FILE="${LOG_DIR}/embarc.${USERNAME}.${i}.log" 
+	   LOG_FILE="${LOG_DIR}/diamond.${USERNAME}.${i}.log" 
 	done
 	LOG_NAME=`basename $LOG_FILE`
 	
 
 	echo "+------------------------------------------------------------" > $LOG_FILE 2>&1
-	echo "|  Script:      ${SCRIPT_DIR}/embarc-2.0 " >> $LOG_FILE 2>&1
-	echo "|  Description: run EMBARC analysys pipeline for a subject" >> $LOG_FILE 2>&1
+	echo "|  Script:      ${SCRIPT_DIR}/diamond-2.0 " >> $LOG_FILE 2>&1
+	echo "|  Description: run DIAMOND analysys pipeline for a subject" >> $LOG_FILE 2>&1
 	echo "|  Start:       ${DT} " >> $LOG_FILE 2>&1
 	echo "|  Argument:    ${DATA_DIR_PATH} " >> $LOG_FILE 2>&1
 	echo "|  Subject:     ${USERNAME} " >> $LOG_FILE 2>&1
@@ -86,7 +86,7 @@ do
 	echo "|  Version:     ${VERSION} " >> $LOG_FILE 2>&1
 	echo "+------------------------------------------------------------" >> $LOG_FILE 2>&1
 	echo " " >> $LOG_FILE 2>&1
-	echo "Running an EMBARC pipeline for ${USERNAME} from ${PLACE} .." 2>&1 | tee -a $LOG_FILE
+	echo "Running an DIAMOND pipeline for ${USERNAME} from ${PLACE} .." 2>&1 | tee -a $LOG_FILE
 	
 	# if metafile is not there, generate one
 	#if [ ! -e $METAFILE ];
@@ -116,7 +116,7 @@ do
 	#uncompact.sh $DATA_DIR 2>&1 | tee -a $LOG_FILE
 
 	# call an EMBARC script
-	(time embarc.py $FLAGS $DATA_DIR) 2>&1 | tee -a $LOG_FILE
+	(time diamond.py $FLAGS $DATA_DIR) 2>&1 | tee -a $LOG_FILE
 	echo "" 2>&1 | tee -a $LOG_FILE
 
 	# create overal PDF and CSV at the subject directory

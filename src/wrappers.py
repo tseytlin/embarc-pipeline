@@ -4,6 +4,7 @@
 import sys
 import os                                  
 import re
+import glob
 import scipy.io as sio
 
 from nipype.interfaces.matlab import MatlabCommand
@@ -79,7 +80,7 @@ class ASL(BaseInterface):
 		asl_script(input,$first_image_type,0,$TR);
 		exit;
 		""").substitute(d)
-		mlab = MatlabCommand(script=myscript, mfile=True)
+		mlab = MatlabCommand(script=myscript,matlab_cmd="matlab -nodesktop -nosplash",mfile=True)
 		result = mlab.run()
 		return result.runtime
 
@@ -111,8 +112,8 @@ class PPPIInputSpec(BaseInterfaceInputSpec):
 	spm_mat_file = File(exists=True,field='directory', desc='absolute path to SPM.mat',copyfile=True,mandatory=True)
 	comp_contrasts = traits.Int(0,desc="Compute Contrasts",field='CompContrasts', usedefault=True)	
 class PPPIOutputSpec(TraitedSpec):
-	#con_images = OutputMultiPath(File(exists=True), desc='contrast images from a t-contrast')
-	#spmT_images = OutputMultiPath(File(exists=True), desc='stat images from a t-contrast')
+	beta_images = OutputMultiPath(File(exists=True), desc='beta images')
+	residual_image = File(exists=True, desc='residual images')
 	spm_mat_file = File(exists=True, desc='Updated SPM mat file')
 	
 """
@@ -153,36 +154,48 @@ class PPPI(BaseInterface):
 				 spm_file=spm_file,directory=directory,contrast=contrast)
 		myscript = Template("""
 		warning('off','all');
+
+		% copy input 
+		spm = $spm_file;		
+		load(spm);		
+		SPM.VResMS.fname = [SPM.swd '/ResMS.img'];
+		SPM.xVol.VRpv.fname = [SPM.swd '/RPV.img'];
+		SPM.VM.fname = ls([SPM.swd '/../*/mask.img']);
+		for i=1:length(SPM.Vbeta)
+			if strcmp(SPM.Vbeta(i).fname(1),'/') == 0
+				SPM.Vbeta(i).fname = [SPM.swd '/' SPM.Vbeta(i).fname];				
+			end
+		end		
+		SPM.swd = '$directory';
+		save(spm,'SPM');
 		cd('$directory');
+		%dos(['ln -sf ' path '/../*/*.[ih]* .']);
 		load('ppi_master_template.mat')
 		P.CompContrasts = $contrast;
 		P.VOI=char($voi_file);
 		P.Region=char($voi_name);
 		P.subject=char($subject);
-        P.directory=char('$directory');
+        	P.directory=char('$directory');
+		P.FLmask =1;
+		P.equalroi = 0;
 		mat = [char($subject),'_analysis_',char($voi_name),'.mat'];
-		mkdir('PPI');
 		save(mat,'P');
-        PPPI(mat);
-       	exit;
+        	PPPI(mat);
+       		exit;
 		""").substitute(d)
 		mlab = MatlabCommand(script=myscript, mfile=True)
 		result = mlab.run()
 		return result.runtime
 
 	def _list_outputs(self):
+		voi = str(self.inputs.voi_name)
+		outdir = os.path.dirname(self.inputs.spm_mat_file)
+		outdir = os.path.abspath(os.path.join(outdir,"PPI_"+voi))
 		outputs = self._outputs().get()
-		#pth, _ = os.path.split(self.inputs.spm_mat_file)
-		#spm = sio.loadmat(self.inputs.spm_mat_file, struct_as_record=False)
-		#con_images = []
-		#spmT_images = []
-		#for con in spm['SPM'][0, 0].xCon[0]:
-		#	con_images.append(str(os.path.join(pth, con.Vcon[0, 0].fname[0])))
-		#	spmT_images.append(str(os.path.join(pth, con.Vspm[0, 0].fname[0])))
-		#if con_images:
-		#	outputs['con_images'] = con_images
-		#	outputs['spmT_images'] = spmT_images
-		outputs['spm_mat_file'] = self.inputs.spm_mat_file
+		#outputs['spm_mat_file'] = self.inputs.spm_mat_file
+		outputs['spm_mat_file'] = os.path.join(outdir,"SPM.mat")
+		outputs['beta_images'] = sorted(glob.glob(outdir+'/beta_00*.img'))
+		outputs['residual_image'] = os.path.join(outdir,"ResMS.img")
 		return outputs
 
 ##############################################################################		
@@ -408,7 +421,7 @@ class Nuisance(BaseInterface):
 ##############################################################################		
 ##############################################################################		
 class PrintInputSpec(BaseInterfaceInputSpec): 
-	in_file = InputMultiPath(File(exists=True),desc='Input File',mandatory=True)
+	in_file = InputMultiPath(File(exists=True,copyfile=False),desc='Input File',mandatory=True)
 	out_file = File(value='print.ps',desc='Output Postscript File',usedefault=True, genfile=True)
 class PrintOutputSpec(TraitedSpec):
 	out_file = File(exists=True, desc='Output PDF file')
@@ -442,11 +455,11 @@ class Print(BaseInterface):
 			plot_design_matrix(input,output);
 		elseif strcmp(ext,'.nii')
 			nifti2jpeg(input);
-			system(['jpeg2ps ' output ' ' pathstr '*.jpg' ]);
+			system(['jpeg2ps ' output ' ' pathstr '/*.jpg' ]);
 		end
 	   	exit;
 		""").substitute(d)
-		mlab = MatlabCommand(script=myscript, mfile=True)
+		mlab = MatlabCommand(script=myscript, matlab_cmd="matlab -nodesktop -nosplash",mfile=True)
 		result = mlab.run()
 		return result.runtime
 
@@ -537,7 +550,10 @@ class CorrelateROIs(BaseInterface):
 		fclose(fid);
 
        	
-       	exit;
+       
+
+
+		exit;
 		""").substitute(d)
 		mlab = MatlabCommand(script=myscript, mfile=True)
 		result = mlab.run()
