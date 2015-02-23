@@ -116,7 +116,7 @@ do
 	#uncompact.sh $DATA_DIR 2>&1 | tee -a $LOG_FILE
 
 	# call an EMBARC script
-	(time diamond.py $FLAGS $DATA_DIR) 2>&1 | tee -a $LOG_FILE
+	(time diamond-preprocess.py $FLAGS $DATA_DIR) 2>&1 | tee -a $LOG_FILE
 	echo "" 2>&1 | tee -a $LOG_FILE
 
 	# create overal PDF and CSV at the subject directory

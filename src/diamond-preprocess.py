@@ -6,6 +6,7 @@ import sys
 import os                                  
 import re
 
+CPU_CORES = 16
 
 
 """
@@ -19,13 +20,13 @@ def datasource(directory, sequence):
 	subject=get_subject(directory)
 	
 	# define templates for datasource
-	field_template = dict(func=sequence+"/*.img",struct="anat/T1MPRAGE*[0-9].nii",behav=sequence+"/*Task*.txt")
-	template_args  = dict(func=[[]],struct=[[]],behav=[[]])                
+	field_template = dict(func=sequence+"/*.img",struct="anat/T1MPRAGE*[0-9].nii") #,behav=sequence+"/*Task*.txt"
+	template_args  = dict(func=[[]],struct=[[]]) #,behav=[[]]                
 
 	# specify input dataset just pass through parameters
 	datasource = pe.Node(interface=nio.DataGrabber(
 						 infields=['subject_id','sequence'], 
-						 outfields=['func', 'struct','behav']),
+						 outfields=['func', 'struct']), #,'behav'
 	                     name = 'datasource')
 	datasource.inputs.base_directory = os.path.abspath(directory)
 	datasource.inputs.template = '*'
@@ -269,41 +270,41 @@ if __name__ == "__main__":
 		log.info("\n\nREWARD 1 pipeline ...\n\n")
 		t = time.time()		
 		reward = preprocess(directory,"reward_1")
-		reward.run()
+		reward.run(plugin='MultiProc', plugin_args={'n_procs' : CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	if check_sequence(opt_list,directory,"reward_2"):
 		log.info("\n\nREWARD 2 pipeline ...\n\n")
 		t = time.time()		
 		reward = preprocess(directory,"reward_2")
-		reward.run()
+		reward.run(plugin='MultiProc', plugin_args={'n_procs' : CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 	if check_sequence(opt_list,directory,"efnback_1"):
 		log.info("\n\nEfnback 1 pipeline ...\n\n")
 		t = time.time()		
 		efnback = preprocess(directory,"efnback_1")
-		efnback.run()
+		efnback.run(plugin='MultiProc', plugin_args={'n_procs' : CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	if check_sequence(opt_list,directory,"efnback_2"):
 		log.info("\n\nEfnback 2 pipeline ...\n\n")
 		t = time.time()		
 		efnback = preprocess(directory,"efnback_2")
-		efnback.run()
+		efnback.run(plugin='MultiProc', plugin_args={'n_procs' : CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 	
 	if check_sequence(opt_list,directory,"dynamic_faces"):
 		log.info("\n\nDynamic_Faces 2 pipeline ...\n\n")
 		t = time.time()		
 		df = preprocess(directory,"dynamic_faces")
-		df.run()
+		df.run(plugin='MultiProc', plugin_args={'n_procs' : CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	if check_sequence(opt_list,directory,"resting_state"):
 		log.info("\n\nRESTING1 pipeline ...\n\n")
 		t = time.time()		
 		resting1 = resting(directory)
-		resting1.run()
+		resting1.run(plugin='MultiProc', plugin_args={'n_procs' : CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 		
 	log.info("\n\npipeline complete\n\n")
