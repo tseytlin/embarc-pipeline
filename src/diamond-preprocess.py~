@@ -137,7 +137,6 @@ def preprocess(directory,sequence):
 	datasink.inputs.base_directory = out_dir
 	
 	task.connect(pp,"output.func",datasink,"data.functional")
-	task.connect(pp,"output.movement",datasink,"data.functional")
 	task.connect(pp,"output.struct",datasink,"data.structural")
 	task.connect(pp,"output.mask",datasink,"data.mask")
 	
