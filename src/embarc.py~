@@ -703,7 +703,6 @@ def task(directory,sequence,subject, ds, params):
 		task.connect(contrast,('con_images',subset,0),datasink,"data.l1_pppi_"+roi[0])
 	
 	task.connect(pp,"output.func",datasink,"data.functional")
-	task.connect(pp,"output.movement",datasink,"data.functional")
 	task.connect(pp,"output.struct",datasink,"data.structural")
 	task.connect(pp,"output.mask",datasink,"data.mask")
 	
