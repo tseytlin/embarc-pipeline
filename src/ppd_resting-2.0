@@ -1,0 +1,150 @@
+#!/bin/sh
+# Henry Chase (University of Pittsburgh), 
+# Eugene Tseytlin (University of Pittsburgh)
+# init project variables
+
+VERSION="2.0"
+SCRIPT_DIR=`dirname $0`
+PROG_FILE=`basename $0`
+#. "${SCRIPT_DIR}/project.properties"
+. /raid/r3/p1/Phillips/projects/Eugene/projects/EMBARC/project.properties
+export PATH=/usr/local/pkg/afni_2013:$PATH
+
+
+
+#embarc.py $@
+
+
+
+# do some parameter checking
+if [ -z $1 ];
+then
+    PROG=`basename $0` 
+    echo "Usage: ${PROG} [-asl|-ert|-reward|-resting1|-resting2|-flt] <dir1> ...[dirN]"
+    echo "Run an EMBARC 2.0 analysis pipeline on the set of subject data directories." 
+exit 1
+fi
+FLAGS=""
+# go over each dataset one at a time
+for DATA_DIR in $@
+do
+	# skip some flags
+	if [ $DATA_DIR == "-asl" -o $DATA_DIR == "-reward" -o $DATA_DIR == "-resting1" -o $DATA_DIR == "-resting2" -o $DATA_DIR == "-ert" -o $DATA_DIR == "-flt" ];
+	then
+		FLAGS="${FLAGS} ${DATA_DIR}"
+		continue
+	fi	
+	
+	# get some info
+	NAME=`basename $DATA_DIR`
+	USERNAME=`echo $NAME | awk -F '_' '{printf "%s",$1; }'`
+	PLACE=`echo $USERNAME | cut -c 1-2`
+	DT=`date`
+	METAFILE=${DATA_DIR}/status.txt
+	VERSION_FILE=${DATA_DIR}/version.txt
+	DATA_DIR_PATH=`(cd $DATA_DIR;pwd)`
+	
+	# save version file
+	if [ ! -e $VERSION_FILE ]; then
+		echo $VERSION > $VERSION_FILE 
+	fi
+	
+	# check version file
+	VER=`cat $VERSION_FILE`
+	if [ $VERSION != $VER ]; then
+		echo "Error: It seems that ${DATA_DIR} was already processed by embarc-2.0 version $VER" 2>&1 | tee -a $LOG_FILE
+		exit 1;
+	fi
+	
+	
+	# create a log file
+	if [ ! -d $LOG_DIR ];
+	then
+	    mkdir $LOG_DIR
+	fi
+	# transfer.subject.N.log
+	# find empty log file
+	i=1
+	LOG_FILE="${LOG_DIR}/embarc.${USERNAME}.${i}.log" 
+	while [ -e $LOG_FILE ] 
+	do
+	   let "i=i+1"
+	   LOG_FILE="${LOG_DIR}/embarc.${USERNAME}.${i}.log" 
+	done
+	LOG_NAME=`basename $LOG_FILE`
+	
+	echo "+------------------------------------------------------------" > $LOG_FILE 2>&1
+	echo "|  Script:      ${SCRIPT_DIR}/resting-2.0 " >> $LOG_FILE 2>&1
+	echo "|  Description: run EMBARC analysys pipeline for a subject" >> $LOG_FILE 2>&1
+	echo "|  Start:       ${DT} " >> $LOG_FILE 2>&1
+	echo "|  Argument:    ${DATA_DIR_PATH} " >> $LOG_FILE 2>&1
+	echo "|  Subject:     ${USERNAME} " >> $LOG_FILE 2>&1
+	echo "|  Institution: ${PLACE} " >> $LOG_FILE 2>&1
+	echo "|  Flags:       ${FLAGS} " >> $LOG_FILE 2>&1
+	echo "|  Version:     ${VERSION} " >> $LOG_FILE 2>&1
+	echo "+------------------------------------------------------------" >> $LOG_FILE 2>&1
+	echo " " >> $LOG_FILE 2>&1
+	echo "Running an EMBARC pipeline for ${USERNAME} from ${PLACE} .." 2>&1 | tee -a $LOG_FILE
+	
+	# if metafile is not there, generate one
+	#if [ ! -e $METAFILE ];
+	#then
+	#	metafile.sh -create $DATA_DIR
+	#fi
+	
+	# now make sure that acpc was done
+	#ACPC_COUNT=`find $DATA_DIR -name '*.acpc.*' | wc -l`
+	#if [ "$ACPC_COUNT" -ge 6 ];
+	#then
+	#	metafile.sh -update $DATA_DIR process.acpc
+	#else
+	#	for x in $DATA_DIR/dicom_* 
+	#	do 
+	#		ls $x/*.acpc.* > /dev/null 2>&1;  
+	#		if [ $? -ne 0 ]; 
+	#		then 
+	#			y=`basename $x`
+	#			echo "Warning: AC/PC reorientation was not performed on ${USERNAME}/${y}" | tee -a $LOG_FILE
+	#		fi; 
+	#	done
+	#
+	#fi
+
+	# uncompact this folder
+	#uncompact.sh $DATA_DIR 2>&1 | tee -a $LOG_FILE
+
+	# call an EMBARC script
+	(time ppd_resting.py $FLAGS $DATA_DIR) 2>&1 | tee -a $LOG_FILE
+	
+	# create logs directory if not there
+	if [ ! -e ${DATA_DIR}/logs ];
+	then
+		mkdir ${DATA_DIR}/logs
+	fi
+	
+	# copy log file there
+	#cat $LOG_FILE > ${DATA_DIR}/logs/$LOG_NAME
+	col -b < $LOG_FILE > ${DATA_DIR}/logs/$LOG_NAME
+	
+	#echo "changing ownership of the output directory ..." 
+	#chgrp -R embarc ${DATA_DIR}  2>&1 | tee -a $LOG_FILE
+	#chmod -R ug+w   ${DATA_DIR}  2>&1 | tee -a $LOG_FILE
+	#chmod -R o-wrx  ${DATA_DIR}  2>&1 | tee -a $LOG_FILE
+	
+	# make an error summary
+	echo "--------------------------------------------------------" 2>&1 | tee -a ${DATA_DIR}/logs/$LOG_NAME
+	grep Error $LOG_FILE 2>&1 | tee -a ${DATA_DIR}/logs/$LOG_NAME
+	echo "--------------------------------------------------------" 2>&1 | tee -a ${DATA_DIR}/logs/$LOG_NAME
+	grep Warning $LOG_FILE 2>&1 | tee -a ${DATA_DIR}/logs/$LOG_NAME
+	echo "--------------------------------------------------------" 2>&1 | tee -a ${DATA_DIR}/logs/$LOG_NAME
+	echo " " | tee -a ${DATA_DIR}/logs/$LOG_NAME
+	echo "Done!" | tee -a ${DATA_DIR}/logs/$LOG_NAME
+	
+	
+	# email the log file
+	if [ $EMAIL ];
+	then
+		mail -s "EMBARC analysis on ${USERNAME}" $EMAIL < ${DATA_DIR}/logs/$LOG_NAME
+	fi
+done
+#reset

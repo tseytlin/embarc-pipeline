@@ -209,7 +209,7 @@ def preprocess():
 		struct_bet = pe.Node(interface=afni.SkullStrip(), name="skull_strip")
 		struct_bet.inputs.args = " -ld 30 -push_to_edge -no_avoid_eyes "
 		struct_bet.inputs.outputtype = 'NIFTI'
-	else
+	else:
 		struct_bet = pe.Node(interface=fsl.BET(), name="bet_struct")
 		struct_bet.inputs.mask = True
 		struct_bet.inputs.frac = 0.5

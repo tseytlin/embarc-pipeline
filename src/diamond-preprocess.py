@@ -108,13 +108,9 @@ def resting(directory):
 # run simply preprocessing
 def preprocess(directory,sequence):
 	import nipype.pipeline.engine as pe          # pypeline engine
-	import wrappers as wrap
-	import nipype.interfaces.spm as spm          # spm
-	from nipype.interfaces.utility import Function
-	import nipype.algorithms.misc as misc
-	import nipype.interfaces.utility as util     # utility
 	import nipype.interfaces.io as nio           # Data i/o
-	import embarc	
+	import embarc
+	import gold
 
 	# define base directory
 	base_dir = os.path.abspath(directory+"/analysis/")
@@ -126,55 +122,22 @@ def preprocess(directory,sequence):
 		
 	# get components
 	ds = datasource(directory,sequence)
-	pp = embarc.preprocess()
-		
+	pp = gold.preprocess(embarc.OASIS_template)
+	#pp.get_node("input").inputs.template = embarc.OASIS_template	
+	
 	# connect components into a pipeline
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
 	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
-	
-			
+				
 	datasink = pe.Node(nio.DataSink(), name='datasink')
 	datasink.inputs.base_directory = out_dir
 	
-	task.connect(pp,"output.func",datasink,"data.functional")
-	task.connect(pp,"output.movement",datasink,"data.movement")
-	task.connect(pp,"output.struct",datasink,"data.structural")
-	task.connect(pp,"output.mask",datasink,"data.mask")
-	
-	# print
-	p_ru = pe.Node(interface=wrap.Print(), name="print_realign_params")
-	p_ru.inputs.out_file = "realignment_parameters.ps"
-	
-	p_struct = pe.Node(interface=wrap.Print(), name="print_anatomical")
-	p_struct.inputs.out_file = "brain_anatomical.ps"
-	
-	p_func = pe.Node(interface=wrap.Print(), name="print_func")
-	p_func.inputs.out_file = "brain_func.ps"
-	
-	p_mask = pe.Node(interface=wrap.Print(), name="print_mask")
-	p_mask.inputs.out_file = "brain_mask.ps"
-	
-	
-	task.connect(pp,"output.movement",p_ru,"in_file")
-	task.connect(pp,"output.struct",p_struct,"in_file")
-	task.connect(pp,"output.func",p_func,"in_file")
-	task.connect(pp,"output.mask",p_mask,"in_file")
-	
-	task.connect(p_ru,"out_file",datasink,"ps.@par1")
-	task.connect(p_func,"out_file",datasink,"ps.@par4")
-	task.connect(p_struct,"out_file",datasink,"ps.@par5")
-	task.connect(p_mask,"out_file",datasink,"ps.@par6")
-	
+	# print and save the output of the preprocess pipeline
+	gold.print_save_files(task,pp.get_node('output'),datasink,("func","movement","struct","mask"))	
 		
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
 	return task
-
-
-
-
-
-
 
 
 # check sequence
