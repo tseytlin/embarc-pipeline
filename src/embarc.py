@@ -470,11 +470,13 @@ def ert(directory):
 	# ERT contrasts
 	cont1 = ('iI_cI','T', ['cI', 'iI'],[-1, 1])
 	cont2 = ('Conflict','T',['cC','cI','iC','iI'],[-1, 1,-1,1])
-	params["Contrasts"] = [cont1,cont2]
+	cont3 = ('cI_cC','T',['cC','cI'],[-1,1])
+	params["Contrasts"] = [cont1,cont2,cont3]
 
 	cont1 = ('iI_cI','T', ['PPI_cI', 'PPI_iI'],[-1, 1])
 	cont2 = ('Conflict','T',['PPI_cC','PPI_cI','PPI_iC','PPI_iI'],[-1, 1,-1,1])
-	params["PPI Contrasts"] = [cont1,cont2]
+	cont3 = ('cI_cC','T',['PPI_cC','PPI_cI'],[-1, 1])
+	params["PPI Contrasts"] = [cont1,cont2,cont3]
 	
 		
 	ds = datasource(directory,sequence)

@@ -30,6 +30,9 @@ def datasource(directory, sequence):
 	elif sequence.startswith('efnback'):
 		field_template['behav'] = sequence+"/EFNBACK_NewEye*.txt"
 		template_args['behav']  = [[]]
+	elif sequence.startswith('dynamic_faces'):
+		field_template['behav'] = sequence+"/subject*.txt"
+		template_args['behav']  = [[]]
 
 	# specify input dataset just pass through parameters
 	datasource = pe.Node(interface=nio.DataGrabber(
@@ -46,89 +49,6 @@ def datasource(directory, sequence):
 
 	return datasource
 
-# convert eprime to design matrix
-class design_matrix(embarc.design_matrix):
-	# get eprime to dm
-	def eprime2dm(eprime,pppi):
-	   	import os
-	   	import re
-	   	import scipy.io as sp
-		import glob as gl
-		import numpy
-		import nipype.interfaces.matlab as mlab 
-		from nipype.interfaces.base import Bunch
-	    
-		# convert numpy data array
-		def convert_numpy(ar,toString = False):
-			lst = []
-			for a in ar.tolist():
-				if toString:
-					lst.append(str(a))
-				elif type(a) == numpy.ndarray:
-					if a.size > 1:			
-						lst.append(a.tolist())
-					else:
-						lst.append([a.tolist()])
-				else:
-					lst.append([a])
-			return lst
-
-		m = re.search("([a-z]+)(_[0-9]+)?/[^/]*\.txt",eprime)
-		sequence = m.group(1)
-	   	
-		# get nDM. mat files
-		mat = os.path.join(os.path.dirname(eprime),"nDM*"+sequence+"*.mat")
-		mat = gl.glob(mat)
-		if len(mat) > 0:
-			mat = mat[0]
-		else:
-			# execute matlab script to generate nDM file
-			m = mlab.MatlabCommand()
-			m.inputs.mfile = False
-			m.inputs.script = sequence+"_eprime2dm(\'"+eprime+"\');"
-			m.run();
-		
-			# get nDM file (again)
-			mat = os.path.join(os.path.dirname(eprime),'nDM*.mat')
-			mat = gl.glob(mat)
-			if len(mat) > 0:
-				mat = mat[0]
-
-
-		dm = sp.loadmat(mat,squeeze_me=True)
-		
-		names  = convert_numpy(dm.get('names'),True)
-		onsets = convert_numpy(dm.get('onsets'))
-		durations = convert_numpy(dm.get('durations'))
-	
-		# load up values and convert them
-		# for PPPI remove last column for reward PPI; for ert last 3 columns
-		# error, posterror, misc
-		if pppi:
-			trim = 3
-			if sequence == "reward":
-				trim = 1
-			names = names[0:(len(names)-trim)]
-			durations = durations[0:(len(durations)-trim)]
-			onsets = onsets[0:(len(onsets)-trim)]
-	
-		# create bunch to return
-		bunch = Bunch(conditions=names,onsets=onsets,durations=durations)
-		if 'pmod' in dm:
-			pmod = []
-			for i in range(0,len(dm.get('pmod'))):
-				if dm['pmod']['name'][i].size == 0:
-					pmod.append(None)
-				else:
-					name = str(dm['pmod']['name'][i])
-					param = dm['pmod']['param'][i].tolist()
-					poly = dm['pmod']['poly'][i]
-					pmod.append(Bunch(name=[name],param=[param],poly=[poly]))
-			bunch.pmod = pmod
-	
-		return bunch
-
-
 """
 EMBARC get subject name from a directory
 """
@@ -138,115 +58,265 @@ def get_subject(directory):
 		return m.group(1)
 	return "subject"
 
+def subset(x,i):
+	return x[i]	
+
 """
 EMBARC 2.0 Reward sequence
 """
 def reward(directory,sequence):
-	import embarc
-	params = dict()
-	params["Task Name"] =  "RewardTask"
-	params["Task Units"] = "ParameterEstimate"
-	params["Level1 Names"] = ["anticipation","outcome"]
-	# 1st level ROIs
-	params["Level1 ROIs"] =[[("BA10_anticipation",embarc.ROI_BA10),
-					("LeftBA9_anticipation",embarc.ROI_BA9_L),
-					("RightBA9_anticipation",embarc.ROI_BA9_R),
-					("LeftVS_anticipation",embarc.ROI_VS_L),
-					("RightVS_anticipation",embarc.ROI_VS_R),
-					("LeftBA47_anticipation",embarc.ROI_L_VLPFC),
-					("RightBA47_anticipation",embarc.ROI_R_VLPFC),
-					("BR1_anticipation",embarc.ROI_BR1),
-					("BR2_anticipation",embarc.ROI_BR2),
-					("BR3_anticipation",embarc.ROI_BR3),
-					("BR4_anticipation",embarc.ROI_BR4)],
-					
-				   [("LeftBA9_outcome",embarc.ROI_BA9_L),
-					("RightBA9_outcome",embarc.ROI_BA9_R),
-					("LeftVS_outcome",embarc.ROI_VS_L),
-					("RightVS_outcome",embarc.ROI_VS_R),
-					("BR1_outcome",embarc.ROI_BR1),
-					("BR2_outcome",embarc.ROI_BR2),
-					("BR3_outcome",embarc.ROI_BR3),
-					("BR4_outcome",embarc.ROI_BR4)]]
-	# ROIs for PPI
-	params["PPI ROIs"] = [("Reward_VS",embarc.ROI_VS_LR,
-					[("BR1_anticipation_PPI",embarc.ROI_BR1),
-					 ("BR2_anticipation_PPI",embarc.ROI_BR2),
-					 ("BR3_anticipation_PPI",embarc.ROI_BR3),
-					 ("BR4_anticipation_PPI",embarc.ROI_BR4)])]
-	
-	# Reward Level 1 models
-	params["Level1 Model"] = design_matrix();
-	params["PPPI Model"]   = design_matrix();
-	
+	import nipype.pipeline.engine as pe          # pypeline engine
+	import wrappers as wrap
+	import nipype.interfaces.spm as spm          # spm
+	from nipype.interfaces.utility import Function
+	import nipype.algorithms.misc as misc
+	import nipype.interfaces.utility as util     # utility
+	import nipype.interfaces.io as nio           # Data i/o
+	import gold	
 
+	subject = get_subject(directory)
+	# define base directory
+	base_dir = os.path.abspath(directory+"/analysis/")
+	if not os.path.exists(base_dir):
+		os.makedirs(base_dir)
+	out_dir = os.path.abspath(directory+"/output/"+sequence)
+	if not os.path.exists(out_dir):
+		os.makedirs(out_dir)
+		
+	# some hard-coded sequence specific components
 	# Reward contrasts
 	cont1 = ('RewardExpectancy','T', ['anticipationxanti^1'],[1])
 	cont2 = ('PredictionError','T', ['outcomexsignedPE^1'],[1])
-	params["Contrasts"] = [cont1,cont2]
+	contrasts = [cont1,cont2]
 
 	cont1 = ('RewardExpectancy','T', ['PPI_anticipationxanti^1'],[1])
 	cont2 = ('PredictionError','T', ['PPI_outcomexsignedPE^1'],[1])
-	params["PPI Contrasts"] = [cont1,cont2]
+	pppi_contrasts = [cont1,cont2]
 
+	# get components
+	pp = gold.preprocess(embarc.OASIS_template)
+	ts = gold.task(1,[("Reward_VS",embarc.ROI_VS_LR)])
+	ts.inputs.input.subject = subject
+	ts.inputs.input.contrasts = contrasts
+	ts.inputs.input.pppi_contrasts = pppi_contrasts
+
+	#dm = pe.
 		
-	ds = datasource(directory,sequence)
-	return embarc.task(directory,sequence,get_subject(directory),ds,params)
+	# connect components into a pipeline
+	task = pe.Workflow(name=sequence)
+	task.base_dir = base_dir
+	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
+	task.connect([(pp,ts,[('output.func','input.func'),('output.movement','input.movement')])])
+	task.connect(dm,"design_matrix",ts,"design_matrix")
+	
+	# define datasink
+	datasink = pe.Node(nio.DataSink(), name='datasink')
+	datasink.inputs.base_directory = out_dir
+	
+	# print and save the output of the preprocess pipeline
+	gold.print_save_files(task,pp.get_node('output'),datasink,("func","movement","struct","mask"))	
+	gold.print_save_files(task,ts.get_node('output'),datasink,("spm_mat_file","con_images","pppi_Reward_VS_con_images"))	
+	
+	# extract specific ROIs	
+	anticipation_rois =    [("BA10_anticipation",embarc.ROI_BA10),
+				("LeftBA9_anticipation",embarc.ROI_BA9_L),
+				("RightBA9_anticipation",embarc.ROI_BA9_R),
+				("LeftVS_anticipation",embarc.ROI_VS_L),
+				("RightVS_anticipation",embarc.ROI_VS_R),
+				("LeftBA47_anticipation",embarc.ROI_L_VLPFC),
+				("RightBA47_anticipation",embarc.ROI_R_VLPFC),
+				("BR1_anticipation",embarc.ROI_BR1),
+				("BR2_anticipation",embarc.ROI_BR2),
+				("BR3_anticipation",embarc.ROI_BR3),
+				("BR4_anticipation",embarc.ROI_BR4)]
+	outcome_rois =   [("LeftBA9_outcome",embarc.ROI_BA9_L),
+			  ("RightBA9_outcome",embarc.ROI_BA9_R),
+			  ("LeftVS_outcome",embarc.ROI_VS_L),
+			  ("RightVS_outcome",embarc.ROI_VS_R),
+			  ("BR1_outcome",embarc.ROI_BR1),
+			  ("BR2_outcome",embarc.ROI_BR2),
+			  ("BR3_outcome",embarc.ROI_BR3),
+			  ("BR4_outcome",embarc.ROI_BR4)]
+	pppi_rois  = 	[("BR1_anticipation_PPI",embarc.ROI_BR1),
+			 ("BR2_anticipation_PPI",embarc.ROI_BR2),
+			 ("BR3_anticipation_PPI",embarc.ROI_BR3),
+			 ("BR4_anticipation_PPI",embarc.ROI_BR4)]
+
+
+	csv_name = subject+"_"+sequence+"_outcomes_anticipation.csv"
+	ext = gold.extract_save_rois("anticipation",csv_name,"RewardTask","ParameterEstimate",anticipation_rois,task,datasink)
+	task.connect(ts,("output.con_images",subset,0),ext,"source")
+
+	csv_name = subject+"_"+sequence+"_outcomes_outcome.csv"
+	ext = gold.extract_save_rois("outcome",csv_name,"RewardTask","ParameterEstimate",outcome_rois,task,datasink)
+	task.connect(ts,("output.con_images",subset,1),ext,"source")
+
+	csv_name = subject+"_"+sequence+"_outcomes_anticipation.csv"
+	ext = gold.extract_save_rois("anticipation_pppi",csv_name,"RewardTask","ParameterEstimate",pppi_rois,task,datasink)
+	task.connect(ts,("output.pppi_Reward_VS_con_images",subset,0),ext,"source")
+	
+
+	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
+	return task
 
 """
-EMBARC 2.0 Reward sequence
+EMBARC 2.0 EFNBACK sequence
 """
 def efnback(directory,sequence):
-	import embarc
-	params = dict()
-	params["Task Name"] =  "EfnbackTask"
-	params["Task Units"] = "ParameterEstimate"
-	params["Level1 Names"] = ["anticipation","outcome"]
-	# 1st level ROIs
-	params["Level1 ROIs"] =[[("BA10_anticipation",embarc.ROI_BA10),
-					("LeftBA9_anticipation",embarc.ROI_BA9_L),
-					("RightBA9_anticipation",embarc.ROI_BA9_R),
-					("LeftVS_anticipation",embarc.ROI_VS_L),
-					("RightVS_anticipation",embarc.ROI_VS_R),
-					("LeftBA47_anticipation",embarc.ROI_L_VLPFC),
-					("RightBA47_anticipation",embarc.ROI_R_VLPFC),
-					("BR1_anticipation",embarc.ROI_BR1),
-					("BR2_anticipation",embarc.ROI_BR2),
-					("BR3_anticipation",embarc.ROI_BR3),
-					("BR4_anticipation",embarc.ROI_BR4)],
-					
-				   [("LeftBA9_outcome",embarc.ROI_BA9_L),
-					("RightBA9_outcome",embarc.ROI_BA9_R),
-					("LeftVS_outcome",embarc.ROI_VS_L),
-					("RightVS_outcome",embarc.ROI_VS_R),
-					("BR1_outcome",embarc.ROI_BR1),
-					("BR2_outcome",embarc.ROI_BR2),
-					("BR3_outcome",embarc.ROI_BR3),
-					("BR4_outcome",embarc.ROI_BR4)]]
-	# ROIs for PPI
-	params["PPI ROIs"] = [("Reward_VS",embarc.ROI_VS_LR,
-					[("BR1_anticipation_PPI",embarc.ROI_BR1),
-					 ("BR2_anticipation_PPI",embarc.ROI_BR2),
-					 ("BR3_anticipation_PPI",embarc.ROI_BR3),
-					 ("BR4_anticipation_PPI",embarc.ROI_BR4)])]
-	
-	# Reward Level 1 models
-	params["Level1 Model"] = design_matrix();
-	params["PPPI Model"]   = design_matrix();
-	
+	import nipype.pipeline.engine as pe          # pypeline engine
+	import wrappers as wrap
+	import nipype.interfaces.spm as spm          # spm
+	from nipype.interfaces.utility import Function
+	import nipype.algorithms.misc as misc
+	import nipype.interfaces.utility as util     # utility
+	import nipype.interfaces.io as nio           # Data i/o
+	import gold	
 
+	subject = get_subject(directory)
+	# define base directory
+	base_dir = os.path.abspath(directory+"/analysis/")
+	if not os.path.exists(base_dir):
+		os.makedirs(base_dir)
+	out_dir = os.path.abspath(directory+"/output/"+sequence)
+	if not os.path.exists(out_dir):
+		os.makedirs(out_dir)
+		
+	# some hard-coded sequence specific components
 	# Reward contrasts
 	cont1 = ('RewardExpectancy','T', ['anticipationxanti^1'],[1])
 	cont2 = ('PredictionError','T', ['outcomexsignedPE^1'],[1])
-	params["Contrasts"] = [cont1,cont2]
+	contrasts = [cont1,cont2]
 
 	cont1 = ('RewardExpectancy','T', ['PPI_anticipationxanti^1'],[1])
 	cont2 = ('PredictionError','T', ['PPI_outcomexsignedPE^1'],[1])
-	params["PPI Contrasts"] = [cont1,cont2]
+	pppi_contrasts = [cont1,cont2]
 
+	# get components
+	ds1 = datasource(directory,sequence+"_1")
+	ds2 = datasource(directory,sequence+"_2")		
+	pp1 = gold.preprocess(embarc.OASIS_template)
+	pp1.name = "preprocess_1"	
+	pp2 = gold.preprocess(embarc.OASIS_template)
+	pp2.name = "preprocess_2"
+
+	# merge inputs
+	m1 = pe.Node(interface=util.Merge(), name="merge")
+	m2 = pe.Node(interface=fsl.Merge(), name="fsl_merge")
+
+	# actual task
+	ts = gold.task(1,[("Reward_VS",embarc.ROI_VS_LR)])
+	ts.inputs.input.subject = subject
+	ts.inputs.input.contrasts = contrasts
+	ts.inputs.input.pppi_contrasts = pppi_contrasts
+
+	# create DesignMatrix
+	dm = pe.Node(name="create_DM",interface=Function(input_names=["matlab_function","eprime_file"],
+					output_names=["design_matrix"],function=gold.create_design_matrix))
+	dm.inputs.matlab_function = "efnback_task2dm"
+
+	
+	# connect components into a pipeline
+	task = pe.Workflow(name=sequence)
+	task.base_dir = base_dir
+	task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct')])])
+	task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct')])])
+	
+	task.connect([(pp,ts,[('output.func','input.func'),('output.movement','input.movement')])])
+	task.connect(ds,'behav',dm,"eprime_file")	
+	task.connect(dm,"design_matrix",ts,"input.design_matrix")
+	
+	# define datasink
+	datasink = pe.Node(nio.DataSink(), name='datasink')
+	datasink.inputs.base_directory = out_dir
+	
+	# print and save the output of the preprocess pipeline
+	gold.print_save_files(task,pp.get_node('output'),datasink,("func","movement","struct","mask"))	
+	gold.print_save_files(task,ts.get_node('output'),datasink,("spm_mat_file","con_images","pppi_Reward_VS_con_images"))	
+	
+	
+	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
+	return task
+
+"""
+GOLD 2.0 dynamic faces sequence
+"""
+def dynamic_faces(directory,sequence):
+	import nipype.pipeline.engine as pe          # pypeline engine
+	import wrappers as wrap
+	import nipype.interfaces.spm as spm          # spm
+	from nipype.interfaces.utility import Function
+	import nipype.algorithms.misc as misc
+	import nipype.interfaces.utility as util     # utility
+	import nipype.interfaces.io as nio           # Data i/o
+	import gold
+	import embarc	
+
+	subject = get_subject(directory)
+	# define base directory
+	base_dir = os.path.abspath(directory+"/analysis/")
+	if not os.path.exists(base_dir):
+		os.makedirs(base_dir)
+	out_dir = os.path.abspath(directory+"/output/"+sequence)
+	if not os.path.exists(out_dir):
+		os.makedirs(out_dir)
 		
-	ds = datasource(directory,sequence)
-	return embarc.task(directory,sequence,get_subject(directory),ds,params)
+	# some hard-coded sequence specific components
+	contrasts = []	
+	contrasts.append(("Anger","T",["Anger*bf(1)"],[1]))
+	contrasts.append(("Anger_td","T",["Anger*bf(2)"],[1]))
+	contrasts.append(("Fear","T",["Fear*bf(1)"],[1]))
+	contrasts.append(("Fear_td","T",["Fear*bf(2)"],[1]))
+	contrasts.append(("Sad","T",["Sad*bf(1)"],[1]))
+	contrasts.append(("Sad_td","T",["Sad*bf(2)"],[1]))
+	contrasts.append(("Happy","T",["Happy*bf(1)"],[1]))
+	contrasts.append(("Happy_td","T",["Happy*bf(2)"],[1]))
+	contrasts.append(("IDmorph","T",["IDmorph*bf(1)"],[1]))
+	contrasts.append(("IDmorph_td","T",["IDmorph*bf(2)"],[1]))
+	contrasts.append(("Shape","T",["Shape*bf(1)"],[1]))
+	contrasts.append(("Shape_td","T",["Shape*bf(2)"],[1]))
+	contrasts.append(("Anger > Shape","T",["Anger*bf(1)","Shape*bf(1)"],[1,-1]))
+	contrasts.append(("Fear > Shape","T",["Fear*bf(1)","Shape*bf(1)"],[1,-1]))
+	contrasts.append(("Sad > Shape","T",["Sad*bf(1)","Shape*bf(1)"],[1,-1]))
+	contrasts.append(("Happy > Shape","T",["Happy*bf(1)","Shape*bf(1)"],[1,-1]))
+	contrasts.append(("Emotion > Shape","T",["Anger*bf(1)","Fear*bf(1)","Sad*bf(1)","Happy*bf(1)","Shape*bf(1)"],[.25,.25,.25,.25,-1]))
+
+	# get components
+	ds = datasource(directory,sequence)	
+	pp = gold.preprocess(embarc.OASIS_template)
+	l1 = gold.level1analysis();
+	l1.inputs.input.contrasts = contrasts
+	
+	# mCompCor
+	cc = pe.Node(interface=wrap.mCompCor(), name="mCompCor")
+	cc.inputs.white_mask = embarc.ROI_white
+
+	# create DesignMatrix
+	dm = pe.Node(name="create_DM",interface=Function(input_names=["matlab_function","eprime_file"],
+					output_names=["design_matrix"],function=gold.create_design_matrix))
+	dm.inputs.matlab_function = "dynfaces_task2dm"
+
+	# connect components into a pipeline
+	task = pe.Workflow(name=sequence)
+	task.base_dir = base_dir
+	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
+	task.connect([(pp,cc,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
+	task.connect(cc,"regressors",l1,"input.movement")	
+	task.connect(pp,'input.func',l1,'input.func')
+	task.connect(ds,'behav',dm,"eprime_file")	
+	task.connect(dm,'design_matrix',l1,"input.design_matrix")
+	
+	# define datasink
+	datasink = pe.Node(nio.DataSink(), name='datasink')
+	datasink.inputs.base_directory = out_dir
+	
+	# print and save the output of the preprocess pipeline
+	gold.print_save_files(task,pp.get_node('output'),datasink,("func","movement","struct","mask"))	
+	gold.print_save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images"))	
+	
+	
+	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
+	return task
+
 
 
 # run resting sequence
@@ -255,16 +325,13 @@ def resting(directory):
 	ds = datasource(directory,"resting_state")
 	return embarc.resting(directory,"resting_state",get_subject(directory),ds)
 
+
 # run simply preprocessing
 def preprocess(directory,sequence):
 	import nipype.pipeline.engine as pe          # pypeline engine
-	import wrappers as wrap
-	import nipype.interfaces.spm as spm          # spm
-	from nipype.interfaces.utility import Function
-	import nipype.algorithms.misc as misc
-	import nipype.interfaces.utility as util     # utility
 	import nipype.interfaces.io as nio           # Data i/o
-	import embarc	
+	import embarc
+	import gold
 
 	# define base directory
 	base_dir = os.path.abspath(directory+"/analysis/")
@@ -276,45 +343,19 @@ def preprocess(directory,sequence):
 		
 	# get components
 	ds = datasource(directory,sequence)
-	pp = embarc.preprocess()
-		
+	pp = gold.preprocess(embarc.OASIS_template)
+	#pp.get_node("input").inputs.template = embarc.OASIS_template	
+	
 	# connect components into a pipeline
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
 	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
-	
-			
+				
 	datasink = pe.Node(nio.DataSink(), name='datasink')
 	datasink.inputs.base_directory = out_dir
 	
-	task.connect(pp,"output.func",datasink,"data.functional")
-	task.connect(pp,"output.struct",datasink,"data.structural")
-	task.connect(pp,"output.mask",datasink,"data.mask")
-	
-	# print
-	p_ru = pe.Node(interface=wrap.Print(), name="print_realign_params")
-	p_ru.inputs.out_file = "realignment_parameters.ps"
-	
-	p_struct = pe.Node(interface=wrap.Print(), name="print_anatomical")
-	p_struct.inputs.out_file = "brain_anatomical.ps"
-	
-	p_func = pe.Node(interface=wrap.Print(), name="print_func")
-	p_func.inputs.out_file = "brain_func.ps"
-	
-	p_mask = pe.Node(interface=wrap.Print(), name="print_mask")
-	p_mask.inputs.out_file = "brain_mask.ps"
-	
-	
-	task.connect(pp,"output.movement",p_ru,"in_file")
-	task.connect(pp,"output.struct",p_struct,"in_file")
-	task.connect(pp,"output.func",p_func,"in_file")
-	task.connect(pp,"output.mask",p_mask,"in_file")
-	
-	task.connect(p_ru,"out_file",datasink,"ps.@par1")
-	task.connect(p_func,"out_file",datasink,"ps.@par4")
-	task.connect(p_struct,"out_file",datasink,"ps.@par5")
-	task.connect(p_mask,"out_file",datasink,"ps.@par6")
-	
+	# print and save the output of the preprocess pipeline
+	gold.print_save_files(task,pp.get_node('output'),datasink,("func","movement","struct","mask"))	
 		
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
 	return task
@@ -353,7 +394,7 @@ def check_sequence(opt_list,directory,seq):
 
 # run pipeline if used as standalone script
 if __name__ == "__main__":	
-	opts = "[-dynamic_faces|-efnback_1|-efnback_2|-reward_1|-reward_2|-resting_state]"
+	opts = "[-dynamic_faces|-efnback|-reward|-resting_state]"
 	opt_list = []
 	
 	# get arguments
@@ -411,44 +452,32 @@ if __name__ == "__main__":
 	
 	
 	if check_sequence(opt_list,directory,"reward_1"):
-		log.info("\n\nREWARD 1 pipeline ...\n\n")
+		log.info("\n\nREWARD pipeline ...\n\n")
 		t = time.time()		
-		reward = reward(directory,"reward_1")
+		reward = reward(directory,"reward")
 		reward.run()
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
-	if check_sequence(opt_list,directory,"reward_2"):
-		log.info("\n\nREWARD 2 pipeline ...\n\n")
-		t = time.time()		
-		reward = reward(directory,"reward_2")
-		reward.run()
-		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
-
+	
 	if check_sequence(opt_list,directory,"resting_state"):
-		log.info("\n\nRESTING1 pipeline ...\n\n")
+		log.info("\n\nRESTING pipeline ...\n\n")
 		t = time.time()		
 		resting1 = resting(directory)
 		resting1.run()
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
-	if check_sequence(opt_list,directory,"efnback_1"):
-		log.info("\n\nEfnback 1 pipeline ...\n\n")
+	if check_sequence(opt_list,directory,"efnback"):
+		log.info("\n\nEFNBACK pipeline ...\n\n")
 		t = time.time()		
-		efnback = efnback(directory,"efnback_1")
+		efnback = efnback(directory,"efnback")
 		efnback.run()
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
-	if check_sequence(opt_list,directory,"efnback_2"):
-		log.info("\n\nEfnback 2 pipeline ...\n\n")
-		t = time.time()		
-		efnback = efnback(directory,"efnback_2")
-		efnback.run()
-		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 	
 	if check_sequence(opt_list,directory,"dynamic_faces"):
 		log.info("\n\nDynamic_Faces 2 pipeline ...\n\n")
 		t = time.time()		
-		df = preprocess(directory,"dynamic_faces")
+		df = dynamic_faces(directory,"dynamic_faces")
 		df.run()
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 

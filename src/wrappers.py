@@ -417,6 +417,55 @@ class Nuisance(BaseInterface):
 		outputs['regressors'] = os.getcwd()+"/"+self.inputs.regressors
 		return outputs	
 		
+##############################################################################		
+class mCompCorInputSpec(BaseInterfaceInputSpec): 
+	source = InputMultiPath(File(exists=True),desc='Unsmoothed Functional 4D file',field="source",mandatory=True)
+	brain_mask = InputMultiPath(File(exists=True),desc='Brain mask 3D nifti file',field="mask",mandatory=True)
+	white_mask = InputMultiPath(File(exists=True),desc='White matter mask 3D nifti file',field="mask",mandatory=True)
+	movement = InputMultiPath(File(exists=True,copyfile=True),desc='Realigned Movement .txt file',field="movement",mandatory=True)
+	regressors = File(value='regressors.txt',desc='Output Regressors .txt  File',field='output',usedefault=True, genfile=True, hash_files=False)
+
+class mCompCorOutputSpec(TraitedSpec):
+	regressors = File(exists=True, desc='Generated regressors .txt file')
+	
+"""
+	mCompCore Filtering
+"""
+class mCompCor(BaseInterface):
+	"""
+	Run mCompCore code
+
+	"""
+	input_spec = mCompCorInputSpec
+	output_spec = mCompCorOutputSpec
+	
+	def _run_interface(self, runtime):
+		from nipype.interfaces.spm.base import scans_for_fname,scans_for_fnames
+		from nipype.utils.filemanip import filename_to_list,list_to_filename
+
+		# setup parameters
+		d = dict()
+		d['source'] = str(self.inputs.source)
+		d['brain']  = str(self.inputs.brain_mask)
+		d['white']  = str(self.inputs.white_mask)
+		d['movement'] = str(self.inputs.movement)
+		d['regressors'] = "'"+str(self.inputs.regressors)+"'"
+		#d['directory'] = os.path.dirname(re.sub("[\[\]']","",d['source']))
+		myscript = Template("""
+		warning('off','all');
+		mCompCor($source,$white,$brain,$movement,$regressors);
+       	exit;
+		""").substitute(d)
+		mlab = MatlabCommand(script=myscript, mfile=True)
+		result = mlab.run()
+		return result.runtime
+
+	def _list_outputs(self):
+		outputs = self._outputs().get()
+		#out = os.path.dirname(re.sub("[\[\]']","",str(self.inputs.source)))+"/"
+		outputs['regressors'] = os.getcwd()+"/"+self.inputs.regressors
+		return outputs	
+
 		
 ##############################################################################		
 ##############################################################################		
@@ -439,7 +488,7 @@ class Print(BaseInterface):
 
 		# setup parameters
 		d = dict()
-		d['in_file'] = str(self.inputs.in_file)
+		d['in_file'] = str(self.inputs.in_file).replace("[", "{").replace("]","}")
 		d['out_file']  = str(self.inputs.out_file)
 		myscript = Template("""
 		warning('off','all');
@@ -447,15 +496,21 @@ class Print(BaseInterface):
 		input = $in_file;
 		output = '$out_file';
 		
-		[pathstr,name,ext] = fileparts(input);
+		if isstr(input)
+			input = {input};	
+		end			
+		for in = input
+			in = in{1};
+			[pathstr,name,ext] = fileparts(in);
 		
-		if strcmp(ext,'.txt')
-			plot_realignment_parameters(input,output);
-		elseif strcmp(ext,'.mat')
-			plot_design_matrix(input,output);
-		elseif strcmp(ext,'.nii')
-			nifti2jpeg(input);
-			system(['jpeg2ps ' output ' ' pathstr '/*.jpg' ]);
+			if strcmp(ext,'.txt')
+				plot_realignment_parameters(in,output);
+			elseif strcmp(ext,'.mat')
+				plot_design_matrix(in,output);
+			elseif strcmp(ext,'.nii') || strcmp(ext,'.img')
+				nifti2jpeg(in);
+				system(['jpeg2ps ' output ' ' pathstr '/*.jpg' ]);
+			end
 		end
 	   	exit;
 		""").substitute(d)

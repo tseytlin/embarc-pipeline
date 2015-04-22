@@ -247,6 +247,29 @@ def load_design_matrix(mat_file,trim=0):
 
 
 """
+ Generic method to convert an E-Prime file or other tasks to nDM 
+ design matrix
+"""
+def create_design_matrix(matlab_function, eprime_file):
+	import os
+   	import re
+	import glob as gl
+	import nipype.interfaces.matlab as mlab 
+	
+	# execute matlab script to generate nDM file
+	m = mlab.MatlabCommand()
+	m.inputs.mfile = False
+	m.inputs.script = matlab_function+"(\'"+eprime_file+"\');"
+	m.run();
+
+	# get nDM file (again)
+	mat = os.path.join(os.path.dirname(eprime_file),'nDM*.mat')
+	mat = gl.glob(mat)
+	if len(mat) > 0:
+		mat = mat[0]
+	return mat
+
+"""
 EMBARC 1.5 Level1 Analysis Pipeline
 """
 def level1analysis(trim=0):
@@ -262,9 +285,9 @@ def level1analysis(trim=0):
 
 	# specify design matrix model
 	modelspec = pe.Node(interface=model.SpecifySPMModel(), name= "modelspec")
-	modelspec.inputs.concatenate_runs   = True
-	modelspec.inputs.time_repetition = 2
-	modelspec.inputs.high_pass_filter_cutoff = 60
+	modelspec.inputs.concatenate_runs   = False
+	modelspec.inputs.time_repetition = 1.5
+	modelspec.inputs.high_pass_filter_cutoff = 256
 	modelspec.inputs.input_units = 'secs'
 	l1analysis.connect(inputnode,'movement',modelspec,'realignment_parameters')
 	l1analysis.connect(inputnode,'func',modelspec,'functional_runs')
@@ -274,7 +297,7 @@ def level1analysis(trim=0):
 	level1design = pe.Node(interface=spm.Level1Design(), name= "level1design")
 	level1design.inputs.bases = {'hrf':{'derivs': [1,0]}}
 	level1design.inputs.timing_units = 'secs'
-	level1design.inputs.interscan_interval = 2
+	level1design.inputs.interscan_interval = 1.5
 	l1analysis.connect(modelspec,'session_info',level1design,'session_info')
 
 	# level 1 estimate
@@ -284,6 +307,7 @@ def level1analysis(trim=0):
 
 	# no need for contrast for pppi model
 	contrastestimate = pe.Node(interface = spm.EstimateContrast(), name="contrastestimate")
+	contrastestimate.inputs.use_derivs = True
 	#contrastestimate.inputs.contrasts = contrasts
 	l1analysis.connect(inputnode,'contrasts',contrastestimate,'contrasts')
 	l1analysis.connect(level1estimate,'spm_mat_file',contrastestimate,'spm_mat_file')
@@ -303,12 +327,12 @@ def level1analysis(trim=0):
 
 """
 EMBARC 1.0 Task Sequence Ex: ert/reward
-directory - dataset directory
-sequence  - name of the sequence (ert/reward)
-subject   - optional subject name if None, embarc subject will be derived
-ds		  - DataSource node for this dataset, if None embarc will be used
+create generic task analysis
+pppi_trim_dm - trim the last N columns of design matrix for PPPI analysis
+pppi_rois    - list of tuples (roi_name,roi_file) to create a workflow for 
+
 """
-def task(trim, pppi_rois):
+def task(pppi_trim_dm, pppi_rois):
 	import nipype.pipeline.engine as pe          # pypeline engine
 	import wrappers as wrap
 	import nipype.interfaces.spm as spm          # spm
@@ -321,7 +345,8 @@ def task(trim, pppi_rois):
 	# connect components into a pipeline
 	task = pe.Workflow(name="task")
 	l1 = level1analysis();
-	l2 = level1analysis(trim);
+	l2 = level1analysis(pppi_trim_dm);
+	l2.name = "level1_pppi"
 
 	fields=['subject','func','movement','design_matrix','contrasts','pppi_contrasts']
 	inputnode = pe.Node(interface=util.IdentityInterface(fields=fields),name='input')
@@ -332,7 +357,7 @@ def task(trim, pppi_rois):
 
 	fields = ['spm_mat_file','con_images']	
 	for roi in pppi_rois:
-		fields.append("pppi_con_images_"+roi[0])
+		fields.append("pppi_"+roi[0]+"_con_images")
 
 	outputnode = pe.Node(interface=util.IdentityInterface(fields=fields),name='output')	
 	task.connect(l1,"output.con_images",outputnode,"con_images")
@@ -352,7 +377,7 @@ def task(trim, pppi_rois):
 		task.connect(pppi,'spm_mat_file',contrast,'spm_mat_file')
 		task.connect(pppi,'beta_images',contrast,'beta_images')
 		task.connect(pppi,'residual_image',contrast,'residual_image')
-		task.connect(contrast,'con_images',output,'pppi_con_images_'+roi[0])
+		task.connect(contrast,'con_images',output,"pppi_"+roi[0]+"_con_images")
 	
 	return task
 
@@ -367,27 +392,25 @@ def print_save_files(workflow,node,datasink,files):
 	import nipype.pipeline.engine as pe          # pypeline engine
 	import wrappers as wrap
 	# go over parameters
-	n = 1
 	for param in files:
 		prnt= pe.Node(interface=wrap.Print(), name="print_"+param)
 		prnt.inputs.out_file = param+".ps"
 		workflow.connect(node,param,datasink,"data."+param)
 		workflow.connect(node,param,prnt,"in_file")	
-		workflow.connect(prnt,"out_file",datasink,"ps.@par"+str(n))
-		n = n+1
+		workflow.connect(prnt,"out_file",datasink,"ps.@par"+param)
 
 """
 extract and save a set of ROIs
 """
-def extract_save_rois(name,workflow,source_image,datasink):
+def extract_save_rois(name,csv_name,task_name,task_units,roi_list,workflow,datasink):
 	import nipype.pipeline.engine as pe          # pypeline engine
 	import wrappers as wrap
 	
 	extract = pe.Node(interface=wrap.ROIExtractor(), name="extract_"+name)
-	extract.inputs.roi_images = list(zip(*l1_rois[i])[1])
+	extract.inputs.roi_images = list(zip(*roi_list)[1])
 	extract.inputs.average = 'none'
 	extract.inputs.interpelation = 0
-	extract.inputs.source = source_image
+	#extract.inputs.source = source_image
 	
 	# save CSV file
 	save_csv = pe.Node(name="save_csv_"+name,
@@ -395,9 +418,12 @@ def extract_save_rois(name,workflow,source_image,datasink):
 		output_names=["csv_file"],function=wrap.save_csv))
 	save_csv.inputs.task = task_name
 	save_csv.inputs.units = task_units
-	save_csv.inputs.names = list(zip(*l1_rois[i])[0])
-	save_csv.inputs.output = subject+"_"+sequence+"_outcomes_"+l1_names[i]+".csv"
-	task.connect(extract,"mat_file",save_csv,"ext")
-	task.connect(save_csv,"csv_file",datasink,"csv.@par"+l1_names[i])
+	save_csv.inputs.names = list(zip(*roi_list)[0])
+	save_csv.inputs.output = csv_name
+	
 
+	workflow.connect(extract,"mat_file",save_csv,"ext")
+	workflow.connect(save_csv,"csv_file",datasink,"csv.@par"+name)
+
+	return extract
 

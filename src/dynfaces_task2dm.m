@@ -43,7 +43,7 @@ end
 fclose(fid);
 
 % define presets
-names = {'Anger';'Fear';'Sad';'Happy';'IDmorph';'Shape';'errors'};
+names = {'Anger';'Fear';'Sad';'Happy';'IDmorph';'Shape'}; %'errors'
 durations = cell(length(names),1);
 durations(1:length(names)) = {1}; % hard -coded for now to 4s
 onsets = cell(length(names),1);
@@ -66,10 +66,10 @@ for i=1:length(task.Face)
 		j = 6; % Shape
 	end
 	% check for correct response
-	if ~strcmp(char(task.Crect{i}),char(task.Resp{i}))
-		j = 7; % error
-	end	
-	onsets{j}{end+1} = str2double(task.OnSet{i});
+	%if ~strcmp(char(task.Crect{i}),char(task.Resp{i}))
+	%	j = 7; % error
+	%end	
+	onsets{j}{end+1} = str2double(task.OnSet{i}) / 1000.0;
 end
 
 
