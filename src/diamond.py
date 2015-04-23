@@ -454,7 +454,9 @@ if __name__ == "__main__":
 	if check_sequence(opt_list,directory,"reward_1"):
 		log.info("\n\nREWARD pipeline ...\n\n")
 		t = time.time()		
-		reward = reward(directory,"reward")
+		reward = preprocess(directory,"reward_1")
+		reward.run()
+		reward = preprocess(directory,"reward_2")
 		reward.run()
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
@@ -469,7 +471,9 @@ if __name__ == "__main__":
 	if check_sequence(opt_list,directory,"efnback"):
 		log.info("\n\nEFNBACK pipeline ...\n\n")
 		t = time.time()		
-		efnback = efnback(directory,"efnback")
+		efnback = preprocess(directory,"efnback_1")
+		efnback.run()
+		efnback = preprocess(directory,"efnback_2")
 		efnback.run()
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 

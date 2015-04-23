@@ -656,7 +656,7 @@ def task(directory,sequence,subject, ds, params):
 	datasink = pe.Node(nio.DataSink(), name='datasink')
 	datasink.inputs.base_directory = out_dir
 	
-	task.connect(l1,"output.con_images",datasink,"data.l1")
+	task.connect(l1,"output.con_images",datasink,"data.con_level1")
 	
 	for i in range(0,len(l1_rois)):
 		# extract ROIs from  level1 analysis
@@ -718,7 +718,8 @@ def task(directory,sequence,subject, ds, params):
 		task.connect(contrast,('con_images',subset,0),extract,'source')
 		task.connect(extract,"mat_file",save_csv,"ext")
 		task.connect(save_csv,"csv_file",datasink,"csv.@par"+roi[0])
-		task.connect(contrast,('con_images',subset,0),datasink,"data.l1_pppi_"+roi[0])
+		#task.connect(contrast,('con_images',subset,0),datasink,"data.l1_pppi_"+roi[0])
+		task.connect(contrast,'con_images',datasink,"data.con_level1_pppi_"+roi[0])
 	
 	task.connect(pp,"output.func",datasink,"data.functional")
 	task.connect(pp,"output.movement",datasink,"data.movement")
