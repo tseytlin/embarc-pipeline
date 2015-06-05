@@ -6,6 +6,11 @@ import sys
 import os                                  
 import re
 import embarc
+import gold
+
+## Predefined constants ##
+conf = gold.Config()
+
 
 
 """
@@ -14,25 +19,44 @@ EMBARC 1.0 Input Data Source
 def datasource(directory, sequence):
 	import nipype.pipeline.engine as pe          # pypeline engine
 	import nipype.interfaces.io as nio           # Data i/o
-
+	import glob as gl
+	
 	# define some variables beforehand
 	subject=get_subject(directory)
 	
-	# define templates for datasource
-	field_template = dict(func=sequence+"/*.img",struct="anat/T1MPRAGE*[0-9].nii")
-	template_args  = dict(func=[[]],struct=[[]])                
+	# figure out if this is new or old naming convention file
+	orig = False	
+	m = gl.glob(os.path.join(directory,"anat/T1MPRAGE*[0-9].nii"))
+	if len(m) > 0:
+		orig = True
+
+	if orig:
+		# define templates for datasource
+		field_template = dict(func=sequence+"/*.img",struct="anat/T1MPRAGE*[0-9].nii")
+		template_args  = dict(func=[[]],struct=[[]])                
 
 
-	# add behavior file to task oriented design
-	if sequence.startswith('reward'):
-		field_template['behav'] = sequence+"/*Reward_Task*.txt"
-		template_args['behav']  = [[]]
-	elif sequence.startswith('efnback'):
-		field_template['behav'] = sequence+"/EFNBACK_NewEye*.txt"
-		template_args['behav']  = [[]]
-	elif sequence.startswith('dynamic_faces'):
-		field_template['behav'] = sequence+"/subject*.txt"
-		template_args['behav']  = [[]]
+		# add behavior file to task oriented design
+		if sequence.startswith('reward'):
+			field_template['behav'] = sequence+"/*Reward_Task*.txt"
+			template_args['behav']  = [[]]
+		elif sequence.startswith('efnback'):
+			field_template['behav'] = sequence+"/EFNBACK_NewEye*.txt"
+			template_args['behav']  = [[]]
+		elif sequence.startswith('dynamic_faces'):
+			field_template['behav'] = sequence+"/subject*.txt"
+			template_args['behav']  = [[]]
+	else:
+
+		# define templates for datasource
+		field_template = dict(func=sequence+"/*"+sequence+".img",struct="anat/*_anat.nii")
+		template_args  = dict(func=[[]],struct=[[]])                
+
+
+		# add behavior file to task oriented design
+		if sequence.startswith('reward') or sequence.startswith('efnback') or sequence.startswith('dynamic_faces'):
+			field_template['behav'] = sequence+"/*task.txt"
+			template_args['behav']  = [[]]
 
 	# specify input dataset just pass through parameters
 	datasource = pe.Node(interface=nio.DataGrabber(
@@ -48,6 +72,7 @@ def datasource(directory, sequence):
 	datasource.inputs.sort_filelist = True
 
 	return datasource
+
 
 """
 EMBARC get subject name from a directory
@@ -84,77 +109,94 @@ def reward(directory,sequence):
 		os.makedirs(out_dir)
 		
 	# some hard-coded sequence specific components
-	# Reward contrasts
-	cont1 = ('RewardExpectancy','T', ['anticipationxanti^1'],[1])
-	cont2 = ('PredictionError','T', ['outcomexsignedPE^1'],[1])
-	contrasts = [cont1,cont2]
+	contrasts = []
+	contrasts.append(('RewardExpectancy','T', ['anticipationxanti^1'],[1]))
+	contrasts.append(('PredictionError','T', ['outcomexsignedPE^1'],[1]))
 
-	cont1 = ('RewardExpectancy','T', ['PPI_anticipationxanti^1'],[1])
-	cont2 = ('PredictionError','T', ['PPI_outcomexsignedPE^1'],[1])
-	pppi_contrasts = [cont1,cont2]
+	ppi_contrasts = []
+	ppi_contrasts.append(('RewardExpectancy','T', ['PPI_anticipationxanti^1'],[1]))
+	ppi_contrasts.append(('PredictionError','T', ['PPI_outcomexsignedPE^1'],[1]))
 
 	# get components
-	pp = gold.preprocess(embarc.OASIS_template)
-	ts = gold.task(1,[("Reward_VS",embarc.ROI_VS_LR)])
-	ts.inputs.input.subject = subject
-	ts.inputs.input.contrasts = contrasts
-	ts.inputs.input.pppi_contrasts = pppi_contrasts
+	ds1 = datasource(directory,sequence+"_1")
+	ds2 = datasource(directory,sequence+"_2")
+	
+	pp1 = gold.preprocess(conf)
+	pp2 = gold.preprocess(conf)
+		
+	l1 = gold.level1analysis(conf);
+	l1.inputs.input.contrasts = contrasts
 
-	#dm = pe.
+	l2 = level1analysis(1,"level1_pppi");
+	l2.inputs.input.contrasts = contrasts
+
+	# create DesignMatrix
+	dm1 = pe.Node(name="create_DM1",interface=Function(input_names=["matlab_function","eprime_file"],
+					output_names=["design_matrix"],function=gold.create_design_matrix))
+	dm1.inputs.matlab_function = "reward_eprime2dm"
+
+	dm2 = pe.Node(name="create_DM2",interface=Function(input_names=["matlab_function","eprime_file"],
+					output_names=["design_matrix"],function=gold.create_design_matrix))
+	dm2.inputs.matlab_function = "reward_eprime2dm"
+
+	# setup merge points
+	merge_func = pe.Node(name="merge_func",interface=util.Merge())
+	merge_nDM = pe.Node(name="merge_nDM",interface=util.Merge())
+	merge_move = pe.Node(name="merge_movement",interface=util.Merge())
+		
 		
 	# connect components into a pipeline
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
-	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
-	task.connect([(pp,ts,[('output.func','input.func'),('output.movement','input.movement')])])
-	task.connect(dm,"design_matrix",ts,"design_matrix")
+	task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct')])])
+	task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct')])])
+	task.connect(ds1,'behav',dm1,"eprime_file")	
+	task.connect(ds2,'behav',dm2,"eprime_file")	
+	task.connect(pp1,'output.func',merge_func,'in1')
+	task.connect(pp2,'output.func',merge_func,'in2')
+	task.connect(pp1,'output.movement',merge_move,'in1')
+	task.connect(pp2,'output.movement',merge_move,'in2')
+	task.connect(dm1,'design_matrix',merge_nDM,'in1')
+	task.connect(dm2,'design_matrix',merge_nDM,'in2')
+
+	task.connect(merge_move,"out",l1,"input.movement")	
+	task.connect(mere_func,'out',l1,'input.func')
+	task.connect(merge_nDM,'out',l1,"input.design_matrix")
 	
+	task.connect(merge_move,"out",l2,"input.movement")	
+	task.connect(mere_func,'out',l2,'input.func')
+	task.connect(merge_nDM,'out',l2,"input.design_matrix")
+
 	# define datasink
 	datasink = pe.Node(nio.DataSink(), name='datasink')
 	datasink.inputs.base_directory = out_dir
+
 	
+	# now define PPI
+	pppi_rois  = [("Reward_VS",conf.ROI_VS_LR)]	
+
+	# now do gPPI analysis
+	for roi in pppi_rois:
+		pppi = pe.Node(interface=wrap.PPPI(), name="pppi_"+roi[0])
+		pppi.inputs.voi_name = roi[0]
+		pppi.inputs.voi_file = roi[1]
+		pppi.inputs.subject = subject
+		task.connect(l,'output.spm_mat_file',pppi,'spm_mat_file')
+		
+		contrast = pe.Node(interface = spm.EstimateContrast(), name="contrast"+roi[0])
+		contrast.inputs.contrasts = ppi_contrasts
+		task.connect(pppi,'spm_mat_file',contrast,'spm_mat_file')
+		task.connect(pppi,'beta_images',contrast,'beta_images')
+		task.connect(pppi,'residual_image',contrast,'residual_image')
+		task.connect(contrast,'con_images',datasink,"data.pppi_"+roi[0]+"_con_images")
+		task.connect(pppi,"spm_mat_file",datasink,"data.ppi_"+roi[0]+"_spm_file")
+	
+
 	# print and save the output of the preprocess pipeline
-	gold.print_save_files(task,pp.get_node('output'),datasink,("func","movement","struct","mask"))	
-	gold.print_save_files(task,ts.get_node('output'),datasink,("spm_mat_file","con_images","pppi_Reward_VS_con_images"))	
-	
-	# extract specific ROIs	
-	anticipation_rois =    [("BA10_anticipation",embarc.ROI_BA10),
-				("LeftBA9_anticipation",embarc.ROI_BA9_L),
-				("RightBA9_anticipation",embarc.ROI_BA9_R),
-				("LeftVS_anticipation",embarc.ROI_VS_L),
-				("RightVS_anticipation",embarc.ROI_VS_R),
-				("LeftBA47_anticipation",embarc.ROI_L_VLPFC),
-				("RightBA47_anticipation",embarc.ROI_R_VLPFC),
-				("BR1_anticipation",embarc.ROI_BR1),
-				("BR2_anticipation",embarc.ROI_BR2),
-				("BR3_anticipation",embarc.ROI_BR3),
-				("BR4_anticipation",embarc.ROI_BR4)]
-	outcome_rois =   [("LeftBA9_outcome",embarc.ROI_BA9_L),
-			  ("RightBA9_outcome",embarc.ROI_BA9_R),
-			  ("LeftVS_outcome",embarc.ROI_VS_L),
-			  ("RightVS_outcome",embarc.ROI_VS_R),
-			  ("BR1_outcome",embarc.ROI_BR1),
-			  ("BR2_outcome",embarc.ROI_BR2),
-			  ("BR3_outcome",embarc.ROI_BR3),
-			  ("BR4_outcome",embarc.ROI_BR4)]
-	pppi_rois  = 	[("BR1_anticipation_PPI",embarc.ROI_BR1),
-			 ("BR2_anticipation_PPI",embarc.ROI_BR2),
-			 ("BR3_anticipation_PPI",embarc.ROI_BR3),
-			 ("BR4_anticipation_PPI",embarc.ROI_BR4)]
+	gold.print_save_files(task,pp1.get_node('output'),datasink,("func1","movement1","struct1","mask1"))	
+	gold.print_save_files(task,pp2.get_node('output'),datasink,("func2","movement2","struct2","mask2"))	
+	gold.print_save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images","pppi_Reward_VS_con_images"))	
 
-
-	csv_name = subject+"_"+sequence+"_outcomes_anticipation.csv"
-	ext = gold.extract_save_rois("anticipation",csv_name,"RewardTask","ParameterEstimate",anticipation_rois,task,datasink)
-	task.connect(ts,("output.con_images",subset,0),ext,"source")
-
-	csv_name = subject+"_"+sequence+"_outcomes_outcome.csv"
-	ext = gold.extract_save_rois("outcome",csv_name,"RewardTask","ParameterEstimate",outcome_rois,task,datasink)
-	task.connect(ts,("output.con_images",subset,1),ext,"source")
-
-	csv_name = subject+"_"+sequence+"_outcomes_anticipation.csv"
-	ext = gold.extract_save_rois("anticipation_pppi",csv_name,"RewardTask","ParameterEstimate",pppi_rois,task,datasink)
-	task.connect(ts,("output.pppi_Reward_VS_con_images",subset,0),ext,"source")
-	
 
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
 	return task
@@ -170,7 +212,7 @@ def efnback(directory,sequence):
 	import nipype.algorithms.misc as misc
 	import nipype.interfaces.utility as util     # utility
 	import nipype.interfaces.io as nio           # Data i/o
-	import gold	
+	import gold
 
 	subject = get_subject(directory)
 	# define base directory
@@ -182,56 +224,84 @@ def efnback(directory,sequence):
 		os.makedirs(out_dir)
 		
 	# some hard-coded sequence specific components
-	# Reward contrasts
-	cont1 = ('RewardExpectancy','T', ['anticipationxanti^1'],[1])
-	cont2 = ('PredictionError','T', ['outcomexsignedPE^1'],[1])
-	contrasts = [cont1,cont2]
-
-	cont1 = ('RewardExpectancy','T', ['PPI_anticipationxanti^1'],[1])
-	cont2 = ('PredictionError','T', ['PPI_outcomexsignedPE^1'],[1])
-	pppi_contrasts = [cont1,cont2]
-
+	contrasts = []	
+	
 	# get components
 	ds1 = datasource(directory,sequence+"_1")
-	ds2 = datasource(directory,sequence+"_2")		
-	pp1 = gold.preprocess(embarc.OASIS_template)
-	pp1.name = "preprocess_1"	
-	pp2 = gold.preprocess(embarc.OASIS_template)
-	pp2.name = "preprocess_2"
-
-	# merge inputs
-	m1 = pe.Node(interface=util.Merge(), name="merge")
-	m2 = pe.Node(interface=fsl.Merge(), name="fsl_merge")
-
-	# actual task
-	ts = gold.task(1,[("Reward_VS",embarc.ROI_VS_LR)])
-	ts.inputs.input.subject = subject
-	ts.inputs.input.contrasts = contrasts
-	ts.inputs.input.pppi_contrasts = pppi_contrasts
-
-	# create DesignMatrix
-	dm = pe.Node(name="create_DM",interface=Function(input_names=["matlab_function","eprime_file"],
-					output_names=["design_matrix"],function=gold.create_design_matrix))
-	dm.inputs.matlab_function = "efnback_task2dm"
-
+	ds2 = datasource(directory,sequence+"_2")
 	
+	pp1 = gold.preprocess(conf)
+	pp2 = gold.preprocess(conf)
+		
+	l1 = gold.level1analysis(conf);
+	l1.inputs.input.contrasts = contrasts
+	
+	# create DesignMatrix
+	dm1 = pe.Node(name="create_DM1",interface=Function(input_names=["matlab_function","eprime_file"],
+					output_names=["design_matrix"],function=gold.create_design_matrix))
+	dm1.inputs.matlab_function = "efnback_eprime2dm"
+
+	dm2 = pe.Node(name="create_DM2",interface=Function(input_names=["matlab_function","eprime_file"],
+					output_names=["design_matrix"],function=gold.create_design_matrix))
+	dm2.inputs.matlab_function = "efnback_eprime2dm"
+
+	# setup merge points
+	merge_func = pe.Node(name="merge_func",interface=util.Merge())
+	merge_nDM = pe.Node(name="merge_nDM",interface=util.Merge())
+	merge_move = pe.Node(name="merge_movement",interface=util.Merge())
+		
+		
 	# connect components into a pipeline
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
 	task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct')])])
 	task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct')])])
-	
-	task.connect([(pp,ts,[('output.func','input.func'),('output.movement','input.movement')])])
-	task.connect(ds,'behav',dm,"eprime_file")	
-	task.connect(dm,"design_matrix",ts,"input.design_matrix")
+	task.connect(ds1,'behav',dm1,"eprime_file")	
+	task.connect(ds2,'behav',dm2,"eprime_file")	
+	task.connect(pp1,'output.func',merge_func,'in1')
+	task.connect(pp2,'output.func',merge_func,'in2')
+	task.connect(pp1,'output.movement',merge_move,'in1')
+	task.connect(pp2,'output.movement',merge_move,'in2')
+	task.connect(dm1,'design_matrix',merge_nDM,'in1')
+	task.connect(dm2,'design_matrix',merge_nDM,'in2')
+
+	task.connect(merge_move,"out",l1,"input.movement")	
+	task.connect(mere_func,'out',l1,'input.func')
+	task.connect(merge_nDM,'out',l1,"input.design_matrix")
 	
 	# define datasink
 	datasink = pe.Node(nio.DataSink(), name='datasink')
 	datasink.inputs.base_directory = out_dir
-	
+
 	# print and save the output of the preprocess pipeline
-	gold.print_save_files(task,pp.get_node('output'),datasink,("func","movement","struct","mask"))	
-	gold.print_save_files(task,ts.get_node('output'),datasink,("spm_mat_file","con_images","pppi_Reward_VS_con_images"))	
+	gold.print_save_files(task,pp1.get_node('output'),datasink,("func1","movement1","struct1","mask1"))	
+	gold.print_save_files(task,pp2.get_node('output'),datasink,("func2","movement2","struct2","mask2"))	
+	gold.print_save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images"))	
+
+	# now define PPI
+	ppi_contrasts = []	
+	#ppi_contrasts.append(("Anger","T",["PPI_Anger"],[1]))
+	#ppi_contrasts.append(("Anger_td","T",["PPI_Anger"],[1]))
+	#pppi_rois  = 	[("left_amygdala",embarc.ROI_L_amyg),
+	#		 ("right_amygdala",embarc.ROI_R_amyg),
+	#		 ("left_VLPFC",embarc.ROI_L_VLPFC),
+	#		 ("right_VLPFC",embarc.ROI_R_VLPFC)]	
+
+	# now do gPPI analysis
+	#for roi in pppi_rois:
+	#	pppi = pe.Node(interface=wrap.PPPI(), name="pppi_"+roi[0])
+	#	pppi.inputs.voi_name = roi[0]
+	#	pppi.inputs.voi_file = roi[1]
+	#	pppi.inputs.subject = subject
+	#	task.connect(l1,'output.spm_mat_file',pppi,'spm_mat_file')
+	#	
+	#	contrast = pe.Node(interface = spm.EstimateContrast(), name="contrast"+roi[0])
+	#	contrast.inputs.contrasts = ppi_contrasts
+	#	task.connect(pppi,'spm_mat_file',contrast,'spm_mat_file')
+	#	task.connect(pppi,'beta_images',contrast,'beta_images')
+	#	task.connect(pppi,'residual_image',contrast,'residual_image')
+	#	task.connect(contrast,'con_images',datasink,"data.pppi_"+roi[0]+"_con_images")
+	#	task.connect(pppi,"spm_mat_file",datasink,"data.ppi_"+roi[0]+"_spm_file")
 	
 	
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
@@ -282,8 +352,8 @@ def dynamic_faces(directory,sequence):
 
 	# get components
 	ds = datasource(directory,sequence)	
-	pp = gold.preprocess(embarc.OASIS_template)
-	l1 = gold.level1analysis();
+	pp = gold.preprocess(conf)
+	l1 = gold.level1analysis(conf);
 	l1.inputs.input.contrasts = contrasts
 	
 	# mCompCor
@@ -301,21 +371,52 @@ def dynamic_faces(directory,sequence):
 	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
 	task.connect([(pp,cc,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
 	task.connect(cc,"regressors",l1,"input.movement")	
-	task.connect(pp,'input.func',l1,'input.func')
+	task.connect(pp,'output.func',l1,'input.func')
 	task.connect(ds,'behav',dm,"eprime_file")	
 	task.connect(dm,'design_matrix',l1,"input.design_matrix")
 	
 	# define datasink
 	datasink = pe.Node(nio.DataSink(), name='datasink')
 	datasink.inputs.base_directory = out_dir
-	
+
 	# print and save the output of the preprocess pipeline
 	gold.print_save_files(task,pp.get_node('output'),datasink,("func","movement","struct","mask"))	
 	gold.print_save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images"))	
+
+	# now define PPI
+	ppi_contrasts = []	
+	ppi_contrasts.append(("Anger","T",["PPI_Anger"],[1]))
+	ppi_contrasts.append(("Fear","T",["PPI_Fear"],[1]))
+	ppi_contrasts.append(("Sad","T",["PPI_Sad"],[1]))
+	ppi_contrasts.append(("Happy","T",["PPI_Happy"],[1]))
+
+	#ppi_contrasts.append(("Anger_td","T",["PPI_Anger"],[1]))
+	
+	pppi_rois  = 	[("left_amygdala",embarc.ROI_L_amyg),
+			 ("right_amygdala",embarc.ROI_R_amyg),
+			 ("left_VLPFC",embarc.ROI_L_VLPFC),
+			 ("right_VLPFC",embarc.ROI_R_VLPFC)]	
+
+	# now do gPPI analysis
+	for roi in pppi_rois:
+		pppi = pe.Node(interface=wrap.PPPI(), name="pppi_"+roi[0])
+		pppi.inputs.voi_name = roi[0]
+		pppi.inputs.voi_file = roi[1]
+		pppi.inputs.subject = subject
+		task.connect(l1,'output.spm_mat_file',pppi,'spm_mat_file')
+		
+		contrast = pe.Node(interface = spm.EstimateContrast(), name="contrast"+roi[0])
+		contrast.inputs.contrasts = ppi_contrasts
+		task.connect(pppi,'spm_mat_file',contrast,'spm_mat_file')
+		task.connect(pppi,'beta_images',contrast,'beta_images')
+		task.connect(pppi,'residual_image',contrast,'residual_image')
+		task.connect(contrast,'con_images',datasink,"data.pppi_"+roi[0]+"_con_images")
+		task.connect(pppi,"spm_mat_file",datasink,"data.ppi_"+roi[0]+"_spm_file")
 	
 	
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
 	return task
+
 
 
 
@@ -343,7 +444,7 @@ def preprocess(directory,sequence):
 		
 	# get components
 	ds = datasource(directory,sequence)
-	pp = gold.preprocess(embarc.OASIS_template)
+	pp = gold.preprocess(conf)
 	#pp.get_node("input").inputs.template = embarc.OASIS_template	
 	
 	# connect components into a pipeline
@@ -365,7 +466,7 @@ def preprocess(directory,sequence):
 def check_sequence(opt_list,directory,seq):
 	seq_dir = seq
 	# check if directory exists
-	if not os.path.exists(directory+seq_dir):
+	if not (os.path.exists(directory+seq_dir) or os.path.exists(directory+seq_dir+"_1")):
 		print "Error: data directory for "+seq+" does not exists, skipping .."
 		print "Missing directory: "+directory+seq_dir
 		return False
@@ -451,7 +552,9 @@ if __name__ == "__main__":
 	#mlab.MatlabCommand.set_default_paths(bin_dir)
 	
 	
-	if check_sequence(opt_list,directory,"reward_1"):
+
+	
+	if check_sequence(opt_list,directory,"reward"):
 		log.info("\n\nREWARD pipeline ...\n\n")
 		t = time.time()		
 		reward = preprocess(directory,"reward_1")
@@ -482,7 +585,7 @@ if __name__ == "__main__":
 		log.info("\n\nDynamic_Faces 2 pipeline ...\n\n")
 		t = time.time()		
 		df = dynamic_faces(directory,"dynamic_faces")
-		df.run()
+		df.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	

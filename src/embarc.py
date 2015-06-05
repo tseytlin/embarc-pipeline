@@ -112,9 +112,13 @@ def get_subject(directory):
 	return "subject"
 
 def get_site(directory):
-	m = re.search('embarc_CU_([A-Z]+).+_mri',directory)
+	m = re.search('/([A-Z]{2})/embarc_CU_([A-Z]+).+_mri',directory)
 	if m:
 		return m.group(1)
+	else:
+		m = re.search('embarc_CU_([A-Z]+).+_mri',directory)
+		if m:
+			return m.group(1)
 	return "site"
 
 
@@ -205,7 +209,7 @@ def preprocess():
 	sfunc_bet.inputs.vertical_gradient = 0
 	
 	# EMBARC 1.0 really liked SkullStrip for MG only
-	if subject_site == "MG":	
+	if subject_site == "MG" or subject_site == "SB":	
 		struct_bet = pe.Node(interface=afni.SkullStrip(), name="skull_strip")
 		struct_bet.inputs.args = " -ld 30 -push_to_edge -no_avoid_eyes "
 		struct_bet.inputs.outputtype = 'NIFTI'
@@ -460,7 +464,15 @@ def ert(directory):
 			("ER_R_amyg",ROI_R_amyg,
 				[("pgCing_iI_minus_cI_RAmyg_PPI",ROI_PG_ACC),
 				 ("dCing_iI_minus_cI_RAmyg_PPI",ROI_D_ACC),
-				 ("sgCing_iI_minus_cI_RAmyg_PPI",ROI_SG_ACC)])]	
+				 ("sgCing_iI_minus_cI_RAmyg_PPI",ROI_SG_ACC)]),
+			("ER_L_ant_insula",ROI_L_ant_insula,
+				[("pgCing_iI_minus_cI_LAins_PPI",ROI_PG_ACC),
+				 ("dCing_iI_minus_cI_LAins_PPI",ROI_D_ACC),
+				 ("sgCing_iI_minus_cI_LAins_PPI",ROI_SG_ACC)]),
+			("ER_R_ant_insula",ROI_R_ant_insula,
+				[("pgCing_iI_minus_cI_RAins_PPI",ROI_PG_ACC),
+				 ("dCing_iI_minus_cI_RAins_PPI",ROI_D_ACC),
+				 ("sgCing_iI_minus_cI_RAins_PPI",ROI_SG_ACC)])]	
 	
 	# ERT Level 1 model
 	params["Level1 Model"] = design_matrix();

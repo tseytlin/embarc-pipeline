@@ -10,6 +10,10 @@ function nifti2jpeg(file, flags)
     %elseif ~isempty(findstr(flags,'-3d'))
 	%	flags = [flags ' -axial -sagital -coronal']; 
 	end
+	
+	% graph title 
+	name = [basename(dirname(file)) '/' basename(file)];
+
 
 	%
 	% strip .gz suffix
@@ -20,7 +24,7 @@ function nifti2jpeg(file, flags)
 	end
 	
 	% load nifti file
-    out=file(1:length(file)-4);
+    	out=file(1:length(file)-4);
 	nii=load_untouch_nii(file);
 	
 	%axial: 
@@ -29,8 +33,8 @@ function nifti2jpeg(file, flags)
 		montage(imrotate(permute(nii.img(:,:,:,1),[1 2 4 3]), 90),'DisplayRange',[])
 		colormap gray
 		colorbar
-		title(['axial of ' file]);
-        saveas(gcf,[out '_axial.jpg']);
+		title(['axial of ' name]);
+       		saveas(gcf,[out '_axial.jpg']);
 	end
 	
 	%sagital: 
@@ -39,7 +43,7 @@ function nifti2jpeg(file, flags)
 		montage(imrotate(permute(nii.img(:,:,:,1),[2 3 4 1]), 90),'DisplayRange',[])
 		colormap gray
 		colorbar
-        title(['sagital of ' file]);
+        	title(['sagital of ' name]);
 		saveas (gcf, [out '_sagital.jpg']);
 	end
 	
@@ -49,7 +53,7 @@ function nifti2jpeg(file, flags)
 		montage(imrotate(permute(nii.img(:,:,:,1),[1 3 4 2]), 90),'DisplayRange',[])
 		colormap gray
 		colorbar
-        title(['coronal of ' file]);
+        	title(['coronal of ' name]);
 		saveas (gcf,[ out '_coronal.jpg']);
 	end
 	
@@ -70,7 +74,7 @@ function nifti2jpeg(file, flags)
 		[n, x] = histvol(hdr, 100);
 		figure;
 		bar(x,n);
-		title(['histogram of ' file]);
+		title(['histogram of ' name]);
 		saveas (gcf,[out '_histogram.jpg']);
     end
     close all;

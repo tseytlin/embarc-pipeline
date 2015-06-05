@@ -508,7 +508,7 @@ class Print(BaseInterface):
 			elseif strcmp(ext,'.mat')
 				plot_design_matrix(in,output);
 			elseif strcmp(ext,'.nii') || strcmp(ext,'.img')
-				nifti2jpeg(in);
+				nifti2jpeg(in,'-axial -histogram');
 				system(['jpeg2ps ' output ' ' pathstr '/*.jpg' ]);
 			end
 		end
