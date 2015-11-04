@@ -825,14 +825,16 @@ def resting(directory,sequence,subject = None,ds = None):
 						  ROI_BR1,ROI_BR2,ROI_BR3,ROI_BR4,ROI_BR9]
 	
 	
-	
-	pp = preprocess()
+	import gold
+	conf = gold.Config()
+	pp = gold.preprocess(conf)
 	nu = pe.Node(interface=wrap.Nuisance(), name="nuisance")
 	nu.inputs.white_mask = ROI_white
 	glm = pe.Node(interface=fsl.GLM(), name="glm")
 	glm.inputs.out_res_name = "residual.4d.nii"
 	filt = pe.Node(interface=fsl.ImageMaths(), name="filter")
-	filt.inputs.op_string = ' -bptf 128 12.5 '
+	#filt.inputs.op_string = ' -bptf 128 12.5 '
+	filt.inputs.op_string = ' -bptf 37 4.167'
 	filt.inputs.terminal_output = 'none'
 	
 	alff = dict()
@@ -861,7 +863,7 @@ def resting(directory,sequence,subject = None,ds = None):
 	maskave = dict()
 	gunzip = dict()
 	
-	for mask in ["BR9","LeftVS","RightVS"]:
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:
 		sca[mask] = CPAC.sca.create_sca(name_sca="sca_"+mask);
 		maskave[mask] = pe.Node(interface=afni.Maskave(),name="roi_ave_"+mask)
 		maskave[mask].inputs.outputtype = "NIFTI"
@@ -882,21 +884,21 @@ def resting(directory,sequence,subject = None,ds = None):
 	extract = dict()
 	save_csv = dict()
 	
-	for nm in [alff_nm[0],alff_nm[1],alff_nm[2],"ReHO","NC","SCA_BR9","SCA_LeftVS","SCA_RightVS"]: 
-		ext = pe.Node(interface=wrap.ROIExtractor(),name="extract_"+nm)
-		ext.inputs.roi_images = resting_roi_images
-		ext.inputs.average = 'none'
-		ext.inputs.interpelation = 0
-		extract[nm] = ext
-		
-		csv = pe.Node(name="save_"+nm,interface=Function(
-			input_names=["task","units","names","ext","output"],
-			output_names=["csv_file"],function=wrap.save_csv))
-		csv.inputs.task = task_name
-		csv.inputs.units = task_units
-		csv.inputs.names = [nm+"_"+ s for s in resting_roi_names]
-		csv.inputs.output = subject+"_"+sequence+"_outcomes_"+nm+".csv"
-		save_csv[nm] = csv
+	#for nm in [alff_nm[0],alff_nm[1],alff_nm[2],"ReHO","NC","SCA_BR9","SCA_LeftVS","SCA_RightVS"]: 
+	#	ext = pe.Node(interface=wrap.ROIExtractor(),name="extract_"+nm)
+	#	ext.inputs.roi_images = resting_roi_images
+	#	ext.inputs.average = 'none'
+	#	ext.inputs.interpelation = 0
+	#	extract[nm] = ext
+	#	
+	#	csv = pe.Node(name="save_"+nm,interface=Function(
+	#		input_names=["task","units","names","ext","output"],
+	#		output_names=["csv_file"],function=wrap.save_csv))
+	#	csv.inputs.task = task_name
+	#	csv.inputs.units = task_units
+	#	csv.inputs.names = [nm+"_"+ s for s in resting_roi_names]
+	#	csv.inputs.output = subject+"_"+sequence+"_outcomes_"+nm+".csv"
+	#	save_csv[nm] = csv
 	
 	datasink = pe.Node(nio.DataSink(), name='datasink')
 	datasink.inputs.base_directory = out_dir
@@ -928,32 +930,32 @@ def resting(directory,sequence,subject = None,ds = None):
 	task.connect(nc,'outputspec.centrality_outputs',zscore,'inputspec.input_file')
 	task.connect(pp,'output.mask',zscore,'inputspec.mask_file')
 
-	for mask in ["BR9","LeftVS","RightVS"]:
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:
 		task.connect(filt,"out_file",maskave[mask],"in_file")
 		#task.connect(pp,"output.mask",maskave,"mask")
 		task.connect(filt,"out_file",sca[mask],"inputspec.functional_file")
 		task.connect(maskave[mask],"out_file",sca[mask],"inputspec.timeseries_one_d")
 		task.connect(sca[mask],("outputspec.Z_score",subset,0),gunzip[mask],'in_file')
-		task.connect(gunzip[mask],"out_file",extract["SCA_"+mask],'source')
+		#task.connect(gunzip[mask],"out_file",extract["SCA_"+mask],'source')
 		task.connect(sca[mask],"outputspec.Z_score",datasink,"data.sca."+mask)
-		task.connect(extract["SCA_"+mask],"mat_file",save_csv["SCA_"+mask],"ext")
-		task.connect(save_csv["SCA_"+mask],"csv_file",datasink,"csv.@par"+mask)
+		#task.connect(extract["SCA_"+mask],"mat_file",save_csv["SCA_"+mask],"ext")
+		#task.connect(save_csv["SCA_"+mask],"csv_file",datasink,"csv.@par"+mask)
 
-	for nm in alff_nm:
-		#task.connect(alff[nm],"outputspec.alff_Z_img",extract[nm],'source')
-		task.connect(alff[nm],"outputspec.falff_Z_img",extract[nm],'source')
-		task.connect(extract[nm],"mat_file",save_csv[nm],"ext")
+	#for nm in alff_nm:
+	#	#task.connect(alff[nm],"outputspec.alff_Z_img",extract[nm],'source')
+	#	task.connect(alff[nm],"outputspec.falff_Z_img",extract[nm],'source')
+	#	task.connect(extract[nm],"mat_file",save_csv[nm],"ext")
 
-	task.connect(reho,"outputspec.z_score",extract["ReHO"],'source')
-	task.connect(extract["ReHO"],"mat_file",save_csv["ReHO"],"ext")
+	#task.connect(reho,"outputspec.z_score",extract["ReHO"],'source')
+	#task.connect(extract["ReHO"],"mat_file",save_csv["ReHO"],"ext")
 	
-	task.connect(zscore,("outputspec.z_score_img",subset,0),extract["NC"],'source')
-	task.connect(extract["NC"],"mat_file",save_csv["NC"],"ext")
+	#task.connect(zscore,("outputspec.z_score_img",subset,0),extract["NC"],'source')
+	#task.connect(extract["NC"],"mat_file",save_csv["NC"],"ext")
 	
-	for nm in alff_nm:
-		task.connect(save_csv[nm],"csv_file",datasink,"csv.@par"+nm)
-	task.connect(save_csv["ReHO"],"csv_file",datasink,"csv.@par2")
-	task.connect(save_csv["NC"],"csv_file",datasink,"csv.@par3")
+	#for nm in alff_nm:
+	#	task.connect(save_csv[nm],"csv_file",datasink,"csv.@par"+nm)
+	#task.connect(save_csv["ReHO"],"csv_file",datasink,"csv.@par2")
+	#task.connect(save_csv["NC"],"csv_file",datasink,"csv.@par3")
 	#task.connect(save_csv["SCA_RightVS"],"csv_file",datasink,"csv.@par4")
 	task.connect(reho,"outputspec.z_score",datasink,"data.reho")
 	task.connect(corroi,"out_file",datasink,"csv.@par5")

@@ -16,6 +16,9 @@ function out = nuisance(unsmoothed_nii_path,white_mask_roi_path,brain_mask_file_
 		out = 'confounds.txt';
 	end
 	
+	% TR in seconds
+	TR=1.5;
+
 	% white matter ROI
 	mask_hdr = spm_vol(white_mask_roi_path);
 	mask_img = spm_read_vols(mask_hdr);
@@ -30,8 +33,8 @@ function out = nuisance(unsmoothed_nii_path,white_mask_roi_path,brain_mask_file_
 	NumScans = length(uimg);
 	ScanDim  = mask_hdr.dim;
 	
-	% constants being generated for hi-pass/lo-pass filter
-	f = (0:NumScans-1)*(0.5/NumScans);
+	% constants being generated for hi-pass/lo-pass filter (uses TR in Hz (1/TR))
+	f = (0:NumScans-1)*((1/TR)/NumScans);
 	BPF = ((0.01<abs(f))& (abs(f) < 0.08));
 	BPF2 = ((0.009<abs(f))& (abs(f) < 0.6));
 
