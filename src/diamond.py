@@ -557,10 +557,10 @@ if __name__ == "__main__":
 	if check_sequence(opt_list,directory,"reward"):
 		log.info("\n\nREWARD pipeline ...\n\n")
 		t = time.time()		
-		reward = preprocess(directory,"reward_1")
+		reward = reward(directory,"reward")
 		reward.run()
-		reward = preprocess(directory,"reward_2")
-		reward.run()
+		#reward = preprocess(directory,"reward_2")
+		#reward.run()
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	
