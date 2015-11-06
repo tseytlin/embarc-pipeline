@@ -33,17 +33,17 @@ do
 		SUBDIRS=$(find $DIR -type 'd' -name 'lams*' | grep -vE 'dti_68_[A-Z].*')
 		for SD in $SUBDIRS
 		do
-			SF=$(basename $SD)
+			SF=$(basename $SD |  sed -e 's/_[0-9]*x[0-9]*\.[0-9]*//g')
 			mkdir $TARGET_DIR/$SF
 			# convert dicom images to an appropriate dir
 			dcm2nii -c n -g n -o $TARGET_DIR/$SF $SD
 		done
 		# copy BHV data???
-		cp $DIR/BHV_*/*DynamicFaces*.[et]* $TARGET_DIR/lams_dynfaces_448x448.7
-		cp $DIR/BHV_*/*blockreward*.[et]* $TARGET_DIR/lams_reward_448x448.8/
-		cp $DIR/BHV_*/EFNBACK*-1.[et]* $TARGET_DIR/lams_efnback_X2_448x448.15/
-		cp $DIR/BHV_*/EFNBACK*-2.[et]* $TARGET_DIR/lams_efnback_X2_448x448.16/
-		cp $DIR/BHV_*/Resting*.[et]* $TARGET_DIR/lams_resting_state_448x448.17/
+		cp $DIR/BHV_*/*DynamicFaces*.[et]* $TARGET_DIR/lams_dynfaces
+		cp $DIR/BHV_*/*blockreward*.[et]* $TARGET_DIR/lams_reward/
+		cp $DIR/BHV_*/EFNBACK*-1.[et]* $TARGET_DIR/lams_efnback_X2/
+		cp $DIR/BHV_*/EFNBACK*-2.[et]* $TARGET_DIR/lams_efnback_X2/
+		cp $DIR/BHV_*/Resting*.[et]* $TARGET_DIR/lams_resting_state/
 		# resting ??? missing? emotion????
 		
 	elif [ $SITE == "case" ]; then
@@ -51,41 +51,41 @@ do
 		dcm2nii -c n -g n -o $TARGET_DIR $DIR/IMG_*
 		
 		# now hard-code each directory and move images there
-		mkdir $TARGET_DIR/lams_sagittal_mprage_256x224.5 2> /dev/null
-		mv $TARGET_DIR/*lamssagittalmprage*.nii $TARGET_DIR/lams_sagittal_mprage_256x224.5
+		mkdir $TARGET_DIR/lams_sagittal_mprage 2> /dev/null
+		mv $TARGET_DIR/*lamssagittalmprage*.nii $TARGET_DIR/lams_sagittal_mprage
 		
-		mkdir $TARGET_DIR/lams_dynfaces_448x448.7 2> /dev/null
-		mv $TARGET_DIR/*lamsdynfaces*.nii $TARGET_DIR/lams_dynfaces_448x448.7
-		cp $DIR/BHV_*/*DynamicFaces*.[et]* $TARGET_DIR/lams_dynfaces_448x448.7
+		mkdir $TARGET_DIR/lams_dynfaces 2> /dev/null
+		mv $TARGET_DIR/*lamsdynfaces*.nii $TARGET_DIR/lams_dynfaces
+		cp $DIR/BHV_*/*DynamicFaces*.[et]* $TARGET_DIR/lams_dynfaces
 		
-		mkdir $TARGET_DIR/lams_reward_448x448.8/ 2> /dev/null
-		mv $TARGET_DIR/*lamsreward*.nii $TARGET_DIR/lams_reward_448x448.8/
-		cp $DIR/BHV_*/*blockreward*.[et]* $TARGET_DIR/lams_reward_448x448.8/
+		mkdir $TARGET_DIR/lams_reward/ 2> /dev/null
+		mv $TARGET_DIR/*lamsreward*.nii $TARGET_DIR/lams_reward
+		cp $DIR/BHV_*/*blockreward*.[et]* $TARGET_DIR/lams_reward
 	
 		FL=($TARGET_DIR/*lamsdti68*.nii)
 		DT=$(basename ${FL[0]} .nii)
-		mkdir $TARGET_DIR/lams_dti_68_1024x1024.9/ 2> /dev/null
-		mv $TARGET_DIR/$DT.[nb]* $TARGET_DIR/lams_dti_68_1024x1024.9/
+		mkdir $TARGET_DIR/lams_dti_68/ 2> /dev/null
+		mv $TARGET_DIR/$DT.[nb]* $TARGET_DIR/lams_dti_68/
 	
 		FL=($TARGET_DIR/*lamsefnback*.nii)
-		mkdir $TARGET_DIR/lams_efnback_X2_448x448.15/ 2> /dev/null
-		mv ${FL[0]} $TARGET_DIR/lams_efnback_X2_448x448.15/
-		cp $DIR/BHV_*/EFNBACK*-1.[et]* $TARGET_DIR/lams_efnback_X2_448x448.15/
+		mkdir $TARGET_DIR/lams_efnback_X2/ 2> /dev/null
+		mv ${FL[0]} $TARGET_DIR/lams_efnback_X2/
+		cp $DIR/BHV_*/EFNBACK*-1.[et]* $TARGET_DIR/lams_efnback_X2/
 		
-		mkdir $TARGET_DIR/lams_efnback_X2_448x448.16/ 2> /dev/null
-		mv ${FL[1]} $TARGET_DIR/lams_efnback_X2_448x448.16/
-		cp $DIR/BHV_*/EFNBACK*-2.[et]* $TARGET_DIR/lams_efnback_X2_448x448.16/
+		mkdir $TARGET_DIR/lams_efnback_X2/ 2> /dev/null
+		mv ${FL[1]} $TARGET_DIR/lams_efnback_X2/
+		cp $DIR/BHV_*/EFNBACK*-2.[et]* $TARGET_DIR/lams_efnback_X2/
 	
-		mkdir $TARGET_DIR/lams_resting_state_448x448.17/ 2> /dev/null
-		mv $TARGET_DIR/*lamsrestingstate*.nii $TARGET_DIR/lams_resting_state_448x448.17/
-		cp $DIR/BHV_*/Resting*.[et]* $TARGET_DIR/lams_resting_state_448x448.17/
+		mkdir $TARGET_DIR/lams_resting_state/ 2> /dev/null
+		mv $TARGET_DIR/*lamsrestingstate*.nii $TARGET_DIR/lams_resting_state/
+		cp $DIR/BHV_*/Resting*.[et]* $TARGET_DIR/lams_resting_state/
 		
 		FL=($TARGET_DIR/*lamsgrefieldmapping*.nii)
-		mkdir $TARGET_DIR/lams_gre_field_mapping_128x128.18/ 2> /dev/null
-		mv ${FL[0]} $TARGET_DIR/lams_gre_field_mapping_128x128.18/
+		mkdir $TARGET_DIR/lams_gre_field_mapping/ 2> /dev/null
+		mv ${FL[0]} $TARGET_DIR/lams_gre_field_mapping/
 		
-		mkdir $TARGET_DIR/lams_gre_field_mapping_128x128.19/ 2> /dev/null
-		mv ${FL[1]} $TARGET_DIR/lams_gre_field_mapping_128x128.19/
+		mkdir $TARGET_DIR/lams_gre_field_mapping/ 2> /dev/null
+		mv ${FL[1]} $TARGET_DIR/lams_gre_field_mapping/
 		
 		# remove excess nifti images
 		rm $TARGET_DIR/*.nii
@@ -93,41 +93,41 @@ do
 	elif [ $SITE == "cinci" ]; then
 	
 		# now hard-code each directory and move images there
-		mkdir $TARGET_DIR/lams_sagittal_mprage_256x224.5 2> /dev/null
-		cp $DIR/$SUBJECT/NIFTI/*lams_sagittal_mprage*.nii $TARGET_DIR/lams_sagittal_mprage_256x224.5
+		mkdir $TARGET_DIR/lams_sagittal_mprage 2> /dev/null
+		cp $DIR/$SUBJECT/NIFTI/*lams_sagittal_mprage*.nii $TARGET_DIR/lams_sagittal_mprage
 		
-		mkdir $TARGET_DIR/lams_dynfaces_448x448.7 2> /dev/null
-		cp $DIR/$SUBJECT/NIFTI/*lams_dynfaces*.nii $TARGET_DIR/lams_dynfaces_448x448.7
-		cp $DIR/BHV_*/*DynamicFaces*.[et]* $TARGET_DIR/lams_dynfaces_448x448.7
+		mkdir $TARGET_DIR/lams_dynfaces 2> /dev/null
+		cp $DIR/$SUBJECT/NIFTI/*lams_dynfaces*.nii $TARGET_DIR/lams_dynfaces
+		cp $DIR/BHV_*/*DynamicFaces*.[et]* $TARGET_DIR/lams_dynfaces
 		
-		mkdir $TARGET_DIR/lams_reward_448x448.8/ 2> /dev/null
-		cp $DIR/$SUBJECT/NIFTI/*lams_reward*.nii $TARGET_DIR/lams_reward_448x448.8/
-		cp $DIR/BHV_*/*blockreward*.[et]* $TARGET_DIR/lams_reward_448x448.8/
+		mkdir $TARGET_DIR/lams_reward/ 2> /dev/null
+		cp $DIR/$SUBJECT/NIFTI/*lams_reward*.nii $TARGET_DIR/lams_reward/
+		cp $DIR/BHV_*/*blockreward*.[et]* $TARGET_DIR/lams_reward/
 	
 		FL=($DIR/$SUBJECT/NIFTI/*dti_68*.nii)
 		DT=$(basename ${FL[0]} .nii)
-		mkdir $TARGET_DIR/lams_dti_68_1024x1024.9/ 2> /dev/null
-		cp $DIR/$SUBJECT/NIFTI/$DT.[nb]* $TARGET_DIR/lams_dti_68_1024x1024.9/
+		mkdir $TARGET_DIR/lams_dti_68/ 2> /dev/null
+		cp $DIR/$SUBJECT/NIFTI/$DT.[nb]* $TARGET_DIR/lams_dti_68/
 	
 		FL=($DIR/$SUBJECT/NIFTI/*lams_efnback*.nii)
-		mkdir $TARGET_DIR/lams_efnback_X2_448x448.15/ 2> /dev/null
-		cp ${FL[0]} $TARGET_DIR/lams_efnback_X2_448x448.15/
-		cp $DIR/BHV_*/EFNBACK*-1.[et]* $TARGET_DIR/lams_efnback_X2_448x448.15/
+		mkdir $TARGET_DIR/lams_efnback_X2/ 2> /dev/null
+		cp ${FL[0]} $TARGET_DIR/lams_efnback_X2/
+		cp $DIR/BHV_*/EFNBACK*-1.[et]* $TARGET_DIR/lams_efnback_X2/
 		
-		mkdir $TARGET_DIR/lams_efnback_X2_448x448.16/ 2> /dev/null
-		cp ${FL[1]} $TARGET_DIR/lams_efnback_X2_448x448.16/
-		cp $DIR/BHV_*/EFNBACK*-2.[et]* $TARGET_DIR/lams_efnback_X2_448x448.16/
+		mkdir $TARGET_DIR/lams_efnback_X2/ 2> /dev/null
+		cp ${FL[1]} $TARGET_DIR/lams_efnback_X2/
+		cp $DIR/BHV_*/EFNBACK*-2.[et]* $TARGET_DIR/lams_efnback_X2/
 	
-		mkdir $TARGET_DIR/lams_resting_state_448x448.17/ 2> /dev/null
-		cp $DIR/$SUBJECT/NIFTI/*lams_resting_state*.nii $TARGET_DIR/lams_resting_state_448x448.17/
+		mkdir $TARGET_DIR/lams_resting_state/ 2> /dev/null
+		cp $DIR/$SUBJECT/NIFTI/*lams_resting_state*.nii $TARGET_DIR/lams_resting_state/
 		cp $DIR/BHV_*/Resting*.[et]* $TARGET_DIR/lams_resting_state_448x448.17/
 		
 		FL=($DIR/$SUBJECT/NIFTI/*GRE_Map*.nii)	
-		mkdir $TARGET_DIR/lams_gre_field_mapping_128x128.18/ 2> /dev/null
-		cp ${FL[0]} $TARGET_DIR/lams_gre_field_mapping_128x128.18/
+		mkdir $TARGET_DIR/lams_gre_field_mapping/ 2> /dev/null
+		cp ${FL[0]} $TARGET_DIR/lams_gre_field_mapping/
 		
-		mkdir $TARGET_DIR/lams_gre_field_mapping_128x128.19/ 2> /dev/null
-		cp ${FL[1]} $TARGET_DIR/lams_gre_field_mapping_128x128.19/
+		mkdir $TARGET_DIR/lams_gre_field_mapping/ 2> /dev/null
+		cp ${FL[1]} $TARGET_DIR/lams_gre_field_mapping/
 	
 	else
 		echo "Error: unrecognized site $SITE for $DIR"
@@ -138,12 +138,34 @@ do
 	for SD in $TARGET_DIR/*
 	do
 		SF=$(basename $SD)
-		mv $SD/*.nii $SD/${SUBJECT}_${SF}.nii 2> /dev/null
-		mv $SD/*.bvec $SD/${SUBJECT}_${SF}.bvec 2> /dev/null
-		mv $SD/*.bval $SD/${SUBJECT}_${SF}.bval 2> /dev/null
-		mv $SD/*.edat2 $SD/${SUBJECT}_${SF}.edat2 2> /dev/null
-		mv $SD/*.edat $SD/${SUBJECT}_${SF}.edat 2> /dev/null
-		mv $SD/*.txt $SD/${SUBJECT}_${SF}.txt 2> /dev/null
+		for SUFFIX in edat2 edat txt
+		do
+			FL=($SD/*.$SUFFIX)
+			if [ "${#FL[@]}" -gt 1 ]; then
+				N=1
+				for F in ${FL[@]}
+				do 
+					mv $F $SD/${SUBJECT}_${SF}_task.${N}.$SUFFIX 2> /dev/null 
+					N=$[$N + 1]
+				done
+			else
+				mv $SD/*.$SUFFIX $SD/${SUBJECT}_${SF}_task.$SUFFIX 2> /dev/null
+			fi 
+		done 
+		for SUFFIX in nii bvec bval
+		do
+			FL=($SD/*.$SUFFIX)
+			if [ "${#FL[@]}" -gt 1 ]; then
+				N=1
+				for F in ${FL[@]}
+				do 
+					mv $F $SD/${SUBJECT}_${SF}.${N}.$SUFFIX 2> /dev/null 
+					N=$[$N + 1]
+				done
+			else
+				mv $SD/*.$SUFFIX $SD/${SUBJECT}_${SF}.$SUFFIX 2> /dev/null
+			fi 
+		done 
 	done
 	
 done
