@@ -1,0 +1,149 @@
+#!/bin/bash 
+#@author Eugene Tseytlin (University of Pittsburgh)
+
+# do some parameter checking
+if [ -z $2 ];
+then
+    PROG=`basename $0` 
+    echo "Usage: ${PROG} <dir1> [dir2] ... [dirN] <target dir>"
+    echo "Transfer LAMS data to a unified directory structure"    
+	exit 1
+fi
+TARGET="${!#}"
+for DIR in $@
+do
+	if [ $DIR == $TARGET ]; then
+		continue
+	fi 	
+	# convert to absolute path
+	DIR=$(cd $DIR;pwd)
+	# figure out input site from second directory
+	SITE=$(basename $(dirname $DIR))
+	SUBJECT=$(basename $DIR)
+	TARGET_DIR="$TARGET/$SITE/$SUBJECT"
+	# create output directory
+	if [ ! -e $TARGET_DIR ]; then
+		mkdir -p $TARGET_DIR
+	fi
+	
+	# now, if PITT do a simple copy of select directory
+	echo "copying $DIR .."
+	if [ $SITE == "pitt" ]; then
+		# go over subdirectories of interests
+		SUBDIRS=$(find $DIR -type 'd' -name 'lams*' | grep -vE 'dti_68_[A-Z].*')
+		for SD in $SUBDIRS
+		do
+			SF=$(basename $SD)
+			mkdir $TARGET_DIR/$SF
+			# convert dicom images to an appropriate dir
+			dcm2nii -c n -g n -o $TARGET_DIR/$SF $SD
+		done
+		# copy BHV data???
+		cp $DIR/BHV_*/*DynamicFaces*.[et]* $TARGET_DIR/lams_dynfaces_448x448.7
+		cp $DIR/BHV_*/*blockreward*.[et]* $TARGET_DIR/lams_reward_448x448.8/
+		cp $DIR/BHV_*/EFNBACK*-1.[et]* $TARGET_DIR/lams_efnback_X2_448x448.15/
+		cp $DIR/BHV_*/EFNBACK*-2.[et]* $TARGET_DIR/lams_efnback_X2_448x448.16/
+		cp $DIR/BHV_*/Resting*.[et]* $TARGET_DIR/lams_resting_state_448x448.17/
+		# resting ??? missing? emotion????
+		
+	elif [ $SITE == "case" ]; then
+		# envoke DCM2NII on the IMG dir
+		dcm2nii -c n -g n -o $TARGET_DIR $DIR/IMG_*
+		
+		# now hard-code each directory and move images there
+		mkdir $TARGET_DIR/lams_sagittal_mprage_256x224.5 2> /dev/null
+		mv $TARGET_DIR/*lamssagittalmprage*.nii $TARGET_DIR/lams_sagittal_mprage_256x224.5
+		
+		mkdir $TARGET_DIR/lams_dynfaces_448x448.7 2> /dev/null
+		mv $TARGET_DIR/*lamsdynfaces*.nii $TARGET_DIR/lams_dynfaces_448x448.7
+		cp $DIR/BHV_*/*DynamicFaces*.[et]* $TARGET_DIR/lams_dynfaces_448x448.7
+		
+		mkdir $TARGET_DIR/lams_reward_448x448.8/ 2> /dev/null
+		mv $TARGET_DIR/*lamsreward*.nii $TARGET_DIR/lams_reward_448x448.8/
+		cp $DIR/BHV_*/*blockreward*.[et]* $TARGET_DIR/lams_reward_448x448.8/
+	
+		FL=($TARGET_DIR/*lamsdti68*.nii)
+		DT=$(basename ${FL[0]} .nii)
+		mkdir $TARGET_DIR/lams_dti_68_1024x1024.9/ 2> /dev/null
+		mv $TARGET_DIR/$DT.[nb]* $TARGET_DIR/lams_dti_68_1024x1024.9/
+	
+		FL=($TARGET_DIR/*lamsefnback*.nii)
+		mkdir $TARGET_DIR/lams_efnback_X2_448x448.15/ 2> /dev/null
+		mv ${FL[0]} $TARGET_DIR/lams_efnback_X2_448x448.15/
+		cp $DIR/BHV_*/EFNBACK*-1.[et]* $TARGET_DIR/lams_efnback_X2_448x448.15/
+		
+		mkdir $TARGET_DIR/lams_efnback_X2_448x448.16/ 2> /dev/null
+		mv ${FL[1]} $TARGET_DIR/lams_efnback_X2_448x448.16/
+		cp $DIR/BHV_*/EFNBACK*-2.[et]* $TARGET_DIR/lams_efnback_X2_448x448.16/
+	
+		mkdir $TARGET_DIR/lams_resting_state_448x448.17/ 2> /dev/null
+		mv $TARGET_DIR/*lamsrestingstate*.nii $TARGET_DIR/lams_resting_state_448x448.17/
+		cp $DIR/BHV_*/Resting*.[et]* $TARGET_DIR/lams_resting_state_448x448.17/
+		
+		FL=($TARGET_DIR/*lamsgrefieldmapping*.nii)
+		mkdir $TARGET_DIR/lams_gre_field_mapping_128x128.18/ 2> /dev/null
+		mv ${FL[0]} $TARGET_DIR/lams_gre_field_mapping_128x128.18/
+		
+		mkdir $TARGET_DIR/lams_gre_field_mapping_128x128.19/ 2> /dev/null
+		mv ${FL[1]} $TARGET_DIR/lams_gre_field_mapping_128x128.19/
+		
+		# remove excess nifti images
+		rm $TARGET_DIR/*.nii
+		
+	elif [ $SITE == "cinci" ]; then
+	
+		# now hard-code each directory and move images there
+		mkdir $TARGET_DIR/lams_sagittal_mprage_256x224.5 2> /dev/null
+		cp $DIR/$SUBJECT/NIFTI/*lams_sagittal_mprage*.nii $TARGET_DIR/lams_sagittal_mprage_256x224.5
+		
+		mkdir $TARGET_DIR/lams_dynfaces_448x448.7 2> /dev/null
+		cp $DIR/$SUBJECT/NIFTI/*lams_dynfaces*.nii $TARGET_DIR/lams_dynfaces_448x448.7
+		cp $DIR/BHV_*/*DynamicFaces*.[et]* $TARGET_DIR/lams_dynfaces_448x448.7
+		
+		mkdir $TARGET_DIR/lams_reward_448x448.8/ 2> /dev/null
+		cp $DIR/$SUBJECT/NIFTI/*lams_reward*.nii $TARGET_DIR/lams_reward_448x448.8/
+		cp $DIR/BHV_*/*blockreward*.[et]* $TARGET_DIR/lams_reward_448x448.8/
+	
+		FL=($DIR/$SUBJECT/NIFTI/*dti_68*.nii)
+		DT=$(basename ${FL[0]} .nii)
+		mkdir $TARGET_DIR/lams_dti_68_1024x1024.9/ 2> /dev/null
+		cp $DIR/$SUBJECT/NIFTI/$DT.[nb]* $TARGET_DIR/lams_dti_68_1024x1024.9/
+	
+		FL=($DIR/$SUBJECT/NIFTI/*lams_efnback*.nii)
+		mkdir $TARGET_DIR/lams_efnback_X2_448x448.15/ 2> /dev/null
+		cp ${FL[0]} $TARGET_DIR/lams_efnback_X2_448x448.15/
+		cp $DIR/BHV_*/EFNBACK*-1.[et]* $TARGET_DIR/lams_efnback_X2_448x448.15/
+		
+		mkdir $TARGET_DIR/lams_efnback_X2_448x448.16/ 2> /dev/null
+		cp ${FL[1]} $TARGET_DIR/lams_efnback_X2_448x448.16/
+		cp $DIR/BHV_*/EFNBACK*-2.[et]* $TARGET_DIR/lams_efnback_X2_448x448.16/
+	
+		mkdir $TARGET_DIR/lams_resting_state_448x448.17/ 2> /dev/null
+		cp $DIR/$SUBJECT/NIFTI/*lams_resting_state*.nii $TARGET_DIR/lams_resting_state_448x448.17/
+		cp $DIR/BHV_*/Resting*.[et]* $TARGET_DIR/lams_resting_state_448x448.17/
+		
+		FL=($DIR/$SUBJECT/NIFTI/*GRE_Map*.nii)	
+		mkdir $TARGET_DIR/lams_gre_field_mapping_128x128.18/ 2> /dev/null
+		cp ${FL[0]} $TARGET_DIR/lams_gre_field_mapping_128x128.18/
+		
+		mkdir $TARGET_DIR/lams_gre_field_mapping_128x128.19/ 2> /dev/null
+		cp ${FL[1]} $TARGET_DIR/lams_gre_field_mapping_128x128.19/
+	
+	else
+		echo "Error: unrecognized site $SITE for $DIR"
+		continue
+	fi
+	
+	# rename all NIFTI files
+	for SD in $TARGET_DIR/*
+	do
+		SF=$(basename $SD)
+		mv $SD/*.nii $SD/${SUBJECT}_${SF}.nii 2> /dev/null
+		mv $SD/*.bvec $SD/${SUBJECT}_${SF}.bvec 2> /dev/null
+		mv $SD/*.bval $SD/${SUBJECT}_${SF}.bval 2> /dev/null
+		mv $SD/*.edat2 $SD/${SUBJECT}_${SF}.edat2 2> /dev/null
+		mv $SD/*.edat $SD/${SUBJECT}_${SF}.edat 2> /dev/null
+		mv $SD/*.txt $SD/${SUBJECT}_${SF}.txt 2> /dev/null
+	done
+	
+done

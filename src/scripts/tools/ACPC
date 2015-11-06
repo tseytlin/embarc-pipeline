@@ -1,0 +1,52 @@
+#!/bin/bash 
+#@author Eugene Tseytlin (University of Pittsburgh)
+
+# init project variables
+SCRIPT_DIR=`dirname $0`
+PROG_FILE=`basename $0`
+. "${SCRIPT_DIR}/project.properties"
+export MATLABPATH=/home/tseytlin/Work/embarc/src:${MATLABPATH}
+
+# do some parameter checking
+if [ -z $1 ];
+then
+    echo "Usage: ${PROG_FILE} <data directory> "
+    echo "Display structural image and do ACPC alignment"    
+exit 1
+fi
+
+# setup parameters
+DATA_DIR=$1
+NAME=`basename $DATA_DIR`
+USERNAME=`echo $NAME | awk -F '_' '{printf "%s_%s",$3,$4; }'`
+PLACE=`echo $USERNAME | cut -c 1-2`
+
+# make sure it is the right directory
+#if [ ! -e ${DATA_DIR}/dicom_anatomical ];
+#then
+#	echo "Error: ${DATA_DIR} doesn't have dicom_anatomical directory."
+#	exit 1
+#fi
+
+# go into directory
+cd ${DATA_DIR}
+
+# copy anatomical to the asl directory
+if [ -e dicom_anatomical -a ! -e dicom_anatomical/${USERNAME}_anatomical.nii ];
+then
+	echo "Renaming: dicom_anatomical/[0-9]*.nii to ${USERNAME}_anatomical.nii" 
+	mv dicom_anatomical/[0-9]*.nii dicom_anatomical/${USERNAME}_anatomical.nii
+fi
+
+# now start the matlab bit
+matlab -nosplash -nodesktop -r ACPC
+
+# change ownership and permissions when done
+if [[ $DATA_DIR == *embarc* ]];
+then
+	chgrp -R embarc .  
+	chmod -R ug+w   . 
+	chmod -R o-wrx  . 
+fi
+reset
+	

@@ -1,0 +1,443 @@
+#!/bin/sh 
+#@author Eugene Tseytlin (University of Pittsburgh)
+
+# program files
+SHA="sha256sum"
+DCM2NII="dcm2nii"
+DCMHDR="dicom_hdr"
+FSLSPLIT="fslsplit"
+VALIDATE="validate_eprime_date.sh"
+#PROJECT_DIR=/home/tseytlin/Data/output
+
+
+# init project variables
+SCRIPT_DIR=`dirname $0`
+. "${SCRIPT_DIR}/project.properties"
+
+# do some parameter checking
+if [ -z $1 ];
+then
+    PROG=`basename $0` 
+    echo "Usage: ${PROG} <file1.tgz> [file2.tgz] ... [fileN.tgz]"
+    echo "Every data file is validated, unpacked, converted to nifti and transfered to the ${PROJECT_DIR} directory for further analysis"    
+exit 1
+fi
+
+# go over input files
+
+echo "processing ..."
+
+for DATA_FILE in $@
+do
+
+	# some dependent variables
+	#DATA_FILE=$1
+	SHA_FILE="${DATA_FILE}.sha256.txt"
+	SHA2_FILE="${DATA_FILE}.sha256.txt2"
+	DATA_FILE_DIR=`dirname ${DATA_FILE}`
+	DATA_FILE_NAME="${DATA_FILE%.*}"
+	DATA_FILE_SUFFIX="${DATA_FILE#.*}"
+	PROG_FILE=`basename $0`
+	NAME=`basename $DATA_FILE`
+	USERNAME=`echo $NAME | awk -F '_' '{printf "%s_%s",$3,$4; }'`
+	PLACE=`echo $USERNAME | cut -c 1-2`
+	
+	# figure out place from subdirectory
+	SITE=`dirname $DATA_FILE`
+	SITE=`(cd $SITE;pwd)`
+	SITE=`basename $SITE`
+	echo $SITE | grep -qE '[A-Z]{2}'
+	if [ $? -eq 0 ]; then
+		PLACE=$SITE
+	fi
+	
+	CONVERTED_DIR="${PLACE}_Converted"
+	TARGET_DIR="${PROJECT_DIR}/${PLACE}"
+	
+	#do some sanity checking
+	if [ ! -f $DATA_FILE ];
+	then
+	    echo "Error: ${DATA_FILE} not found or is not a valid file"
+	    exit 1 
+	fi
+
+	if [ ! -e $SHA_FILE ];
+	then
+	    echo "Error: ${SHA_FILE} not found"
+	    exit 1 
+	fi
+
+	if [ ! -d $PROJECT_DIR ];
+	then
+	    echo "Error: ${PROJECT_DIR} not found or is not a valid directory"
+	    exit 1 
+	fi
+
+	# create a log file
+	if [ ! -d $LOG_DIR ];
+	then
+	    mkdir $LOG_DIR
+	fi
+
+	# transfer.subject.N.log
+	# find empty log file
+	i=1
+	LOG_FILE="${LOG_DIR}/${PROG_FILE%.*}.${USERNAME}.${i}.log" 
+	while [ -e $LOG_FILE ] 
+	do
+	   let "i=i+1"
+	   LOG_FILE="${LOG_DIR}/${PROG_FILE%.*}.${USERNAME}.${i}.log" 
+	done
+
+	# write out a pretty header file
+	DT=`date`
+	echo "+------------------------------------------------------------" > $LOG_FILE 2>&1
+	echo "|  Script:      ${SCRIPT_DIR}/transfer.sh " >> $LOG_FILE 2>&1
+	echo "|  Description: validate, unpack, convert and copy fMRI data" >> $LOG_FILE 2>&1
+	echo "|  Start:       ${DT} " >> $LOG_FILE 2>&1
+	echo "|  Argument:    ${DATA_FILE} " >> $LOG_FILE 2>&1
+	echo "|  Subject:     ${USERNAME} " >> $LOG_FILE 2>&1
+	echo "|  Institution: ${PLACE} " >> $LOG_FILE 2>&1
+	echo "+------------------------------------------------------------" >> $LOG_FILE 2>&1
+	echo " " >> $LOG_FILE 2>&1
+	
+
+	# check the hash file
+	echo "  validating file: ${NAME} .."
+	echo "${SHA} ${DATA_FILE} | awk -F ' ' '{print $1;}' > ${SHA2_FILE}" >> $LOG_FILE 2>&1
+	$SHA $DATA_FILE | awk -F ' ' '{print $1;}' > $SHA2_FILE
+
+	# validating the file
+	echo "diff -q ${SHA_FILE} ${SHA2_FILE}" >> $LOG_FILE 2>&1
+	diff -q $SHA_FILE $SHA2_FILE >> $LOG_FILE 2>&1
+
+	if [ $? -ne 0 ]; 
+	then
+	    echo "Error: file ${DATA_FILE} failed validation"
+	    echo "Error: file ${DATA_FILE} failed validation" >> $LOG_FILE 2>&1
+	    exit 1
+	fi
+
+	# uncompress file
+	echo "  uncompressing file: ${NAME} .."
+	echo "tar -C ${DATA_FILE_DIR} -xzf ${DATA_FILE}" >> $LOG_FILE 2>&1
+	tar -C $DATA_FILE_DIR -xzf $DATA_FILE >> $LOG_FILE 2>&1
+
+	if [ $? -ne 0 ]; 
+	then
+	    echo "Error: failed to unpack ${DATA_FILE}"
+	    echo "Error: failed to unpack ${DATA_FILE}" >> $LOG_FILE 2>&1
+	    exit 1
+	fi
+	
+	# try to determine if we have a fieldmap issue
+	if [ -e ${DATA_FILE_NAME}/dicom_b0map_bold_9.0_2/000000 ];
+	then
+		# if this directory contains ID Image Type//ORIGINAL\PRIMARY\P\ND
+		# that means that this folder should be 9.0 and the other one should
+		# be discarded
+		$DCMHDR ${DATA_FILE_NAME}/dicom_b0map_bold_9.0_2/000000 | grep -q 'PRIMARY\\P'
+		if [ $? -eq 0 ];
+		then
+			# switch two directories places
+			echo "  renaming dicom_b0map_bold_9.0_2 to dicom_b0map_bold_9.0 " >> $LOG_FILE 2>&1
+			mv -f ${DATA_FILE_NAME}/dicom_b0map_bold_9.0 ${DATA_FILE_NAME}/tmp 2>&1 | tee -a $LOG_FILE
+			mv -u ${DATA_FILE_NAME}/dicom_b0map_bold_9.0_2 ${DATA_FILE_NAME}/dicom_b0map_bold_9.0 2>&1 | tee -a $LOG_FILE
+			mv -f ${DATA_FILE_NAME}/tmp ${DATA_FILE_NAME}/dicom_b0map_bold_9.0_2 2>&1 | tee -a $LOG_FILE
+		fi
+		echo "  removing dicom_b0map_bold_9.0_2 directory " >> $LOG_FILE 2>&1
+		tar -C $DATA_FILE_NAME -czf ${DATA_FILE_NAME}/dicom_b0map_bold_9.0_2.tgz dicom_b0map_bold_9.0_2 2>&1 | tee -a $LOG_FILE
+		rm -rf ${DATA_FILE_NAME}/dicom_b0map_bold_9.0_2 2>&1 | tee -a $LOG_FILE
+	fi
+	
+	# remove random numbers that were recently introduced into fieldmap names
+	for FM in `find ${DATA_FILE_NAME} -name 'dicom_b0map_bold_*_[1-9]_*'`
+	do
+		NM=`echo $FM| awk -F '_[1-9]_' '{printf("%s_%s\n",$1,$2)}'`
+		FMN=`basename $FM`
+		NMN=`basename $NM`
+		echo "  renaming $FMN to $NMN" >> $LOG_FILE 2>&1
+		mv -f ${FM} ${NM} 2>&1 | tee -a $LOG_FILE
+	done
+	
+	# try to determine if we have a fieldmap issue
+	# dicom_b0map_bold_6.5_M
+	# dicom_b0map_bold_9.0_M
+	# dicom_b0map_bold_9.0_P
+	if [ -e ${DATA_FILE_NAME}/dicom_b0map_bold_6.5_M ];
+	then
+		echo "  renaming dicom_b0map_bold_6.5_M to dicom_b0map_bold_6.5 " >> $LOG_FILE 2>&1
+		mv -f ${DATA_FILE_NAME}/dicom_b0map_bold_6.5_M  ${DATA_FILE_NAME}/dicom_b0map_bold_6.5 2>&1 | tee -a $LOG_FILE
+	fi
+	
+	# try to determine if we have a fieldmap issue
+	if [ -e ${DATA_FILE_NAME}/dicom_b0map_bold_9.0_P ];
+	then
+		echo "  renaming dicom_b0map_bold_9.0_P to dicom_b0map_bold_9.0 " >> $LOG_FILE 2>&1
+		mv -f ${DATA_FILE_NAME}/dicom_b0map_bold_9.0_P ${DATA_FILE_NAME}/dicom_b0map_bold_9.0 2>&1 | tee -a $LOG_FILE
+	fi
+	
+	# try to determine if we have a fieldmap issue
+	if [ -e ${DATA_FILE_NAME}/dicom_b0map_bold_9.0_M ];
+	then
+		echo "  removing dicom_b0map_bold_9.0_M directory " >> $LOG_FILE 2>&1
+		tar -C $DATA_FILE_NAME -czf ${DATA_FILE_NAME}/dicom_b0map_bold_9.0_M.tgz dicom_b0map_bold_9.0_M 2>&1 | tee -a $LOG_FILE
+		rm -rf ${DATA_FILE_NAME}/dicom_b0map_bold_9.0_M 2>&1 | tee -a $LOG_FILE
+	fi
+	
+	
+	echo "  generating validation table of the input ..."
+	# validate contents of the directory by outputing file count to the log
+	echo "--------< source directory table >---------------" >> $LOG_FILE 2>&1
+	#for X in ${DATA_FILE_DIR}/${DATA_FILE_NAME}/*
+	#do
+    #	Y=`ls $X | wc -l`
+	#	Z=`basename $X`
+	#	echo "$Z :    $Y" >> $LOG_FILE 2>&1
+	#	done
+	# test file counts
+	for X in ${RAWDATA_COUNTS_DIR}/${PLACE}/*
+	do
+		DNAME=`basename ${X}`
+		CNORM=`cat ${X}`
+		if [ -e ${DATA_FILE_NAME}/${DNAME} -o -e "${DATA_FILE_NAME}/${DNAME}.txt" ];
+		then
+			CREAL=`ls ${DATA_FILE_NAME}/${DNAME}* | wc -l`
+			echo "${DNAME} :    ${CREAL}"  >> $LOG_FILE 2>&1
+			if [ "$CNORM" -ne "$CREAL" ];
+			then
+				echo "Warning: raw file count mismatch for ${DNAME}: expected ${CNORM} but got ${CREAL}"
+				echo "Warning: raw file count mismatch for ${DNAME}: expected ${CNORM} but got ${CREAL}" >> $LOG_FILE 2>&1
+			fi
+		else
+			echo "Warning: ${DNAME} doesn't exist"
+			echo "Warning: ${DNAME} doesn't exist"  >> $LOG_FILE 2>&1
+		fi
+	done
+	echo "------------------------------------------------" >> $LOG_FILE 2>&1
+
+	# convert file
+	echo "  converting DICOM files to NII format: ${NAME} .."
+	echo "${DCM2NII} -c N -g N ${DATA_FILE_NAME}" >> $LOG_FILE 2>&1
+	$DCM2NII -c N -g N $DATA_FILE_NAME >> $LOG_FILE 2>&1
+
+	if [ $? -ne 0 ]; 
+	then
+	    echo "Error: failed to convert file ${DATA_FILE_NAME} to nifti"
+	    echo "Error: failed to convert file ${DATA_FILE_NAME} to nifti" >> $LOG_FILE 2>&1
+	    exit 1
+	fi
+
+	# renaming DICOM files
+	for DCM_FILE in `find ${DATA_FILE_NAME} -name *.nii*`
+	do
+	   SUB_DIR=`dirname $DCM_FILE`
+	   NEW_DCM_FILE=`basename $SUB_DIR | awk -F 'dicom' '{print $2}'`
+	   NEW_DCM_FILE="$SUB_DIR/${USERNAME}${NEW_DCM_FILE}.nii"
+	   if [ ! -e $NEW_DCM_FILE ];
+	   then
+			echo "mv $DCM_FILE $NEW_DCM_FILE" >> $LOG_FILE 2>&1
+	   		mv -f $DCM_FILE $NEW_DCM_FILE >> $LOG_FILE 2>&1
+			if [ $? -ne 0 ]; 
+			then
+	   	   		echo "Error: failed to rename file ${DCM_FILE}"
+	    	    echo "Error: failed to rename file ${DCM_FILE}" >> $LOG_FILE 2>&1
+	    	    exit 1
+			fi
+	   fi
+	done
+	
+	
+	# checking if asl data is provided in BRIK format
+	if [ -d ${DATA_FILE_NAME}/dicom_asl/ ];
+	then
+		CWD=$(pwd)
+		cd ${DATA_FILE_NAME}/dicom_asl/
+		
+		# rename to orig if exists
+		BRIK_NAME=""
+		for BRIK in *.BRIK
+		do
+			BRIK_NAME="${BRIK%.*}"
+			if [ ! -e "${BRIK_NAME}+orig.BRIK" ]; then
+				mv "${BRIK_NAME}.HEAD" "${BRIK_NAME}+orig.HEAD"  2>&1 | tee -a $LOG_FILE
+				mv "${BRIK_NAME}.BRIK" "${BRIK_NAME}+orig.BRIK"  2>&1 | tee -a $LOG_FILE
+			fi
+		done
+		# convert to AFNI
+		if [ $BRIK_NAME ]
+		then
+			echo "  convert AFNI to NIFTI .." 2>&1 | tee -a $LOG_FILE
+			for BRIK in *+orig.BRIK
+			do
+				3dAFNItoNIFTI ${BRIK}  2>&1 | tee -a $LOG_FILE
+				mv ${BRIK_NAME}*.nii ${USERNAME}_asl.nii 2>&1 | tee -a $LOG_FILE
+				break
+			done
+		fi
+		cd $CWD
+	fi	
+
+	# if this is StonyBrook data lop off 3 volumes from 
+	# ert/reward/resting scans
+	if [ $PLACE == 'SB' ]; then
+		# renaming NII files 
+		export FSLOUTPUTTYPE=NIFTI
+		for NII_FILE in `find ${DATA_FILE_NAME} -name ${USERNAME}*.nii \
+						   -a ! -name '*anatomical*' -a ! -name '*b0map*' \
+						   -a ! -name '*asl*' -a ! -name '*full*'`
+		do
+			NII2_FILE="${NII_FILE%.*}_full.nii"
+			if [ ! -e ${NII2_FILE} ]; then
+				mv -f $NII_FILE $NII2_FILE 2>&1 | tee -a $LOG_FILE
+				echo "  truncating $NII_FILE by 3 volumes ..." 2>&1 | tee -a $LOG_FILE
+				fslroi ${NII2_FILE} ${NII_FILE} 3 -1 2>&1 | tee -a $LOG_FILE
+			fi
+		done
+	fi
+
+	# split NII into 3D vols in dicom_asl
+	if [ -e ${DATA_FILE_NAME}/dicom_asl/${USERNAME}_asl.nii ];
+	then
+		echo "${FSLSPLIT} ${DATA_FILE_NAME}/dicom_asl/${USERNAME}_asl.nii ${DATA_FILE_NAME}/dicom_asl/${USERNAME}_asl" >> $LOG_FILE 2>&1
+	   	$FSLSPLIT ${DATA_FILE_NAME}/dicom_asl/${USERNAME}_asl.nii ${DATA_FILE_NAME}/dicom_asl/${USERNAME}_asl_ >> $LOG_FILE 2>&1
+		if [ $? -ne 0 ]; 
+		then
+	   		echo "Error: failed to split nifti file ${DATA_FILE_NAME}/dicom_asl/${USERNAME}_asl.nii"
+	    	echo "Error: failed to split nifti file ${DATA_FILE_NAME}/dicom_asl/${USERNAME}_asl.nii" >> $LOG_FILE 2>&1
+	    	exit 1
+		fi
+		echo "gunzip ${DATA_FILE_NAME}/dicom_asl/${USERNAME}_asl_*.gz" >> $LOG_FILE 2>&1
+	   	gunzip ${DATA_FILE_NAME}/dicom_asl/${USERNAME}_asl_*.gz >> $LOG_FILE 2>&1
+		echo "rm ${DATA_FILE_NAME}/dicom_asl/${USERNAME}_asl.nii" >> $LOG_FILE 2>&1
+	   	rm ${DATA_FILE_NAME}/dicom_asl/${USERNAME}_asl.nii
+	fi
+
+	# copy files
+	echo "  copying results from ${NAME} to: ${TARGET_DIR} .."
+
+	# create target directory
+	if [ ! -d $TARGET_DIR ];
+	then
+	    mkdir $TARGET_DIR >> $LOG_FILE 2>&1
+	fi
+
+	USER_DIR=`pwd`
+	DIR=`basename $DATA_FILE_NAME`
+	cd `dirname $DATA_FILE_NAME`
+	echo "cp --parents --update ${DIR}/dicom*/*.nii* ${TARGET_DIR}" >> $LOG_FILE 2>&1
+	cp --parents --update ${DIR}/dicom*/*.nii* $TARGET_DIR >> $LOG_FILE 2>&1
+
+	if [ $? -ne 0 ]; 
+	then
+	    echo "Error: failed to copy nifti files to ${TARGET_DIR}"
+	    echo "Error: failed to copy nifti files to ${TARGET_DIR}" >> $LOG_FILE 2>&1
+	    exit 1
+	fi
+
+	# copy eprime_ert* to dicom_bold_ert
+	if [ -d ${TARGET_DIR}/${DIR}/dicom_bold_ert -a -e ${DIR}/eprime_ert.txt ];
+	then
+		echo "cp --parents --update ${DIR}/eprime_ert* ${TARET_DIR}/${DIR}/dicom_bold_ert" >> $LOG_FILE 2>&1
+		cp --update ${DIR}/eprime_ert* ${TARGET_DIR}/${DIR}/dicom_bold_ert >> $LOG_FILE 2>&1
+
+		if [ $? -ne 0 ]; 
+		then
+		    echo "Error: failed to copy eprime files to ${TARGET_DIR}/${DIR}/dicom_bold_ert"
+		    echo "Error: failed to copy eprime files to ${TARGET_DIR}/${DIR}/dicom_bold_ert" >> $LOG_FILE 2>&1
+		    exit 1
+		fi
+	fi
+	
+	
+	# copy eprime_reward* dicom_bold_reward
+	if [ -d ${TARGET_DIR}/${DIR}/dicom_bold_reward  -a -e ${DIR}/eprime_reward.txt ];
+	then
+		echo "cp --update ${DIR}/eprime_reward* ${TARET_DIR}/${DIR}/dicom_bold_reward" >> $LOG_FILE 2>&1
+		cp --update ${DIR}/eprime_reward* ${TARGET_DIR}/${DIR}/dicom_bold_reward >> $LOG_FILE 2>&1
+
+		if [ $? -ne 0 ]; 
+		then
+		    echo "Error: failed to copy eprime files to ${TARGET_DIR}/${DIR}/dicom_bold_reward"
+		    echo "Error: failed to copy eprime files to ${TARGET_DIR}/${DIR}/dicom_bold_reward" >> $LOG_FILE 2>&1
+		    exit 1
+		fi
+	fi
+	
+	# copy eprime_flt* bhv_flt/ (create)
+	if [ -e ${DIR}/eprime_flt.txt ];
+	then
+		mkdir -p ${TARGET_DIR}/${DIR}/bhv_flt >> $LOG_FILE 2>&1
+		if [ $? -ne 0 ]; 
+		then
+		    echo "Error: failed to create ${TARGET_DIR}/${DIR}/bhv_flt directory"
+		    echo "Error: failed to create ${TARGET_DIR}/${DIR}/bhv_flt directory" >> $LOG_FILE 2>&1
+		    exit 1
+		fi
+		
+		echo "cp --update ${DIR}/eprime_reward* ${TARET_DIR}/${DIR}/dicom_bold_reward" >> $LOG_FILE 2>&1
+		cp --update ${DIR}/eprime_flt* ${TARGET_DIR}/${DIR}/bhv_flt >> $LOG_FILE 2>&1
+
+		if [ $? -ne 0 ]; 
+		then
+		    echo "Error: failed to copy eprime files to ${TARGET_DIR}/${DIR}/bhv_flt"
+		    echo "Error: failed to copy eprime files to ${TARGET_DIR}/${DIR}/bhv_flt" >> $LOG_FILE 2>&1
+		    exit 1
+		fi
+	fi
+
+	
+
+	# move file to TX_Converted
+	if [ ! -d $CONVERTED_DIR ];
+	then
+	    mkdir -p $CONVERTED_DIR
+	fi
+
+	# move all files to Converted
+	echo "mv ${DATA_FILE_NAME}.* $CONVERTED_DIR" >> $LOG_FILE 2>&1
+	mv -f ${DATA_FILE_NAME}.* $CONVERTED_DIR >> $LOG_FILE 2>&1
+
+
+	echo "  generating validation table of the result ..."
+	# validate contents of the directory by outputing file count to the log
+	echo "--------< target directory table >---------------" >> $LOG_FILE 2>&1
+	for X in ${TARGET_DIR}/${DIR}/*
+	do
+		Y=`ls $X | wc -l`
+		Z=`basename $X`
+		echo "$Z :    $Y" >> $LOG_FILE 2>&1
+	done
+
+	# validate eprime date with a DICOM files
+	#echo "  cross-referencing DICOM date with e-prime files ..." 2>&1
+	${VALIDATE} ${DATA_FILE_NAME} >> $LOG_FILE 2>&1
+	if [ $? -eq 0 ]; then
+		echo "  cross-referencing DICOM date with e-prime files done, no problems detected ..." >> $LOG_FILE 2>&1
+	fi
+
+	# copy log file to converted dir
+	cp $LOG_FILE $CONVERTED_DIR
+
+	# create logs directory if not there
+	if [ ! -e ${TARGET_DIR}/${DIR}/logs ];
+	then
+		mkdir ${TARGET_DIR}/${DIR}/logs
+	fi
+	cp $LOG_FILE ${TARGET_DIR}/${DIR}/logs
+	
+	
+	# change to proper permissions
+	echo "  changing ownership of the output directory ..." 
+	chgrp -R embarc ${TARGET_DIR}/${DIR} 2>&1 | tee -a $LOG_FILE
+	chmod -R ug+w ${TARGET_DIR}/${DIR} 2>&1 | tee -a $LOG_FILE
+	chmod -R o-wrx ${TARGET_DIR}/${DIR} 2>&1 | tee -a $LOG_FILE
+
+	# go into old dir
+	cd $USER_DIR
+	
+	echo " "
+done
+
+echo "success!"
+exit 0

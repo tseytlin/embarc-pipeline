@@ -1,0 +1,273 @@
+#!/bin/sh 
+#@author Eugene Tseytlin (University of Pittsburgh)
+
+
+# do some parameter checking
+PROG=`basename $0` 
+
+if [ -z $2 ];
+then
+    echo "Usage: ${PROG} <dir1> [dir2] ... [dirN] <target dir>"
+    echo "Transfer diamond data to a unified directory structure"    
+	exit 1
+fi
+TARGET="${!#}"
+
+# copy/convert E-Prime text files
+function cp_conv() {
+	file -i $1 | grep -q utf-16
+   	if [ $? -eq 0 ]; then
+   		T=$(basename $1)
+		iconv -f utf-16 -t utf-8 $1 > $2/$T	
+    else
+    	cp $1 $2
+    fi	
+}
+
+function check_dir (){
+	ls -d ${1}/${2}* >& /dev/null
+	if [ $? -ne 0 ] ; then
+		echo "  Warning: missing sequence directory $2"
+		return 1	
+	fi 
+	return 0
+}
+
+echo "processing ..."
+
+for DIR in $@
+do
+	# skip target
+	if [ $DIR == $TARGET ]; then
+		continue
+	fi 
+	# convert to absolute path
+	DIR=$(cd $DIR;pwd)
+	LOG_DIR=$DIR/logs
+	COHORT=$(basename $(dirname $DIR))
+	DIR_NAME=$(basename $DIR)
+	USERNAME=$(basename $DIR| awk -F '.' '{print $2}')
+	DATE=$(basename $DIR|awk -F '[_.]' '{print $2}')
+	TARGET_DIR="$TARGET/$COHORT/$DIR_NAME"
+	
+	# create output directory
+	if [ ! -e $TARGET_DIR ]; then
+		mkdir -p $TARGET_DIR >& /dev/null
+	else
+		rm $TARGET_DIR/*/*.* >& /dev/null
+	fi
+	
+	# create a log file
+	if [ ! -d $LOG_DIR ];
+	then
+	    mkdir $LOG_DIR
+	fi
+
+	# transfer.subject.N.log
+	# find empty log file
+	i=1
+	LOG_FILE="${LOG_DIR}/${PROG}.${USERNAME}.${i}.log" 
+	while [ -e $LOG_FILE ] 
+	do
+	   let "i=i+1"
+	   LOG_FILE="${LOG_DIR}/${PROG}.${USERNAME}.${i}.log" 
+	done
+
+	# write out a pretty header file
+	DT=`date`
+	echo "+------------------------------------------------------------" > $LOG_FILE 2>&1
+	echo "|  Script:      ${PROG} " >> $LOG_FILE 2>&1
+	echo "|  Description: validate, unpack, convert and copy fMRI data" >> $LOG_FILE 2>&1
+	echo "|  Start:       ${DT} " >> $LOG_FILE 2>&1
+	echo "|  Argument:    ${DIR} " >> $LOG_FILE 2>&1
+	echo "|  Subject:     ${USERNAME} " >> $LOG_FILE 2>&1
+	echo "|  Cohort: 	  ${COHORT} " >> $LOG_FILE 2>&1
+	echo "+------------------------------------------------------------" >> $LOG_FILE 2>&1
+	echo " " >> $LOG_FILE 2>&1
+	
+	# convert all DICOM images to output target directory	
+	echo "  converting DICOM to NIFTI for $DIR_NAME .." 2>&1 | tee -a $LOG_FILE
+	dcm2nii -c n -g n -o $TARGET_DIR $DIR >> $LOG_FILE 2>&1
+
+	echo "  organizing files for $DIR_NAME .." 2>&1 | tee -a $LOG_FILE
+	mkdir $TARGET_DIR/anat >& /dev/null
+	mv $TARGET_DIR/*T1MPRAGE*.nii $TARGET_DIR/anat 2>&1 | tee -a $LOG_FILE
+	
+	check_dir $DIR dti_68 ; q=$?
+	[ $q -eq 0 ] && mkdir $TARGET_DIR/dti_68 >& /dev/null
+	[ $q -eq 0 ] && mv $TARGET_DIR/*dti68* $TARGET_DIR/dti_68 2>&1 | tee -a $LOG_FILE
+	
+	check_dir $DIR Dynamic-Faces; q=$?
+	[ $q -eq 0 ] && mkdir $TARGET_DIR/dynamic_faces >& /dev/null
+	#mv $TARGET_DIR/*DynamicFaces* $TARGET_DIR/dynamic_faces 2>&1 | tee -a $LOG_FILE
+	[ $q -eq 0 ] && cp $DIR/WPC*/Dynamic_Faces*.* $TARGET_DIR/dynamic_faces 2>&1 | tee -a $LOG_FILE 
+	[ $q -eq 0 ] && cp $DIR/BHV*/Scan/subject*.txt $TARGET_DIR/dynamic_faces 2>&1 | tee -a $LOG_FILE 
+	
+	
+	mkdir $TARGET_DIR/efnback_1 >& /dev/null
+	check_dir $DIR EFNBack_1; q=$?
+	#mv $TARGET_DIR/*EFNBack1* $TARGET_DIR/efnback_1 2>&1 | tee -a $LOG_FILE
+	[ $q -eq 0 ] && cp $DIR/WPC*/EFNBack_1*.* $TARGET_DIR/efnback_1 2>&1 | tee -a $LOG_FILE 
+	[ $q -eq 0 ] && cp $DIR/BHV*/Scan/EFNBACK*-1.edat* $TARGET_DIR/efnback_1 2>&1 | tee -a $LOG_FILE  
+	[ $q -eq 0 ] && cp_conv $DIR/BHV*/Scan/EFNBACK*-1.txt $TARGET_DIR/efnback_1 2>&1 | tee -a $LOG_FILE
+	
+	mkdir $TARGET_DIR/efnback_2 >& /dev/null
+	check_dir $DIR EFNBack_2; q=$?
+	#mv $TARGET_DIR/*EFNBack2* $TARGET_DIR/efnback_2 2>&1 | tee -a $LOG_FILE
+	[ $q -eq 0 ] && cp $DIR/WPC*/EFNBack_2*.* $TARGET_DIR/efnback_2 2>&1 | tee -a $LOG_FILE 
+	[ $q -eq 0 ] && cp $DIR/BHV*/Scan/EFNBACK*-2.edat* $TARGET_DIR/efnback_2 2>&1 | tee -a $LOG_FILE  
+	[ $q -eq 0 ] && cp_conv $DIR/BHV*/Scan/EFNBACK*-2.txt $TARGET_DIR/efnback_2 2>&1 | tee -a $LOG_FILE
+	
+	check_dir $DIR gre_field_mapping ; q=$?
+	[ $q -eq 0 ] && mkdir $TARGET_DIR/field_map >& /dev/null
+	[ $q -eq 0 ] && mv $TARGET_DIR/*fieldmap*.nii $TARGET_DIR/field_map 2>&1 | tee -a $LOG_FILE
+	
+	check_dir $DIR resting-state; q=$?
+	[ $q -eq 0 ] && mkdir $TARGET_DIR/resting_state >& /dev/null
+	#mv $TARGET_DIR/*restingstate*.nii $TARGET_DIR/resting_state 2>&1 | tee -a $LOG_FILE
+	[ $q -eq 0 ] && cp $DIR/WPC*/resting_*.* $TARGET_DIR/resting_state 2>&1 | tee -a $LOG_FILE 
+	
+	check_dir $DIR Reward_1; q=$?
+	[ $q -eq 0 ] && mkdir $TARGET_DIR/reward_1 >& /dev/null
+	#mv $TARGET_DIR/*Reward1*.nii $TARGET_DIR/reward_1 2>&1 | tee -a $LOG_FILE
+	[ $q -eq 0 ] && cp $DIR/WPC*/Reward_1*.* $TARGET_DIR/reward_1 2>&1 | tee -a $LOG_FILE 
+	[ $q -eq 0 ] && cp $DIR/BHV*/Scan/*Reward*-1.edat* $TARGET_DIR/reward_1 2>&1 | tee -a $LOG_FILE  
+	[ $q -eq 0 ] && cp_conv $DIR/BHV*/Scan/*Reward*-1.txt $TARGET_DIR/reward_1/ 2>&1 | tee -a $LOG_FILE  
+	
+	mkdir $TARGET_DIR/reward_2 >& /dev/null
+	check_dir $DIR Reward_1 ; q=$?
+	#mv $TARGET_DIR/*Reward2*.nii $TARGET_DIR/reward_2 2>&1 | tee -a $LOG_FILE
+	[ $q -eq 0 ] && cp $DIR/WPC*/Reward_2*.* $TARGET_DIR/reward_2 2>&1 | tee -a $LOG_FILE 
+	[ $q -eq 0 ] && cp $DIR/BHV*/Scan/*Reward*-2.edat* $TARGET_DIR/reward_2 2>&1 | tee -a $LOG_FILE  
+	[ $q -eq 0 ] && cp_conv $DIR/BHV*/Scan/*Reward*-2.txt $TARGET_DIR/reward_2/ 2>&1 | tee -a $LOG_FILE  
+	
+	mkdir $TARGET_DIR/asl >& /dev/null
+	check_dir $DIR ep2d_MBpCASLsat; q=$?
+	#mv $TARGET_DIR/*pCASL* $TARGET_DIR/asl 2>&1 | tee -a $LOG_FILE
+	[ $q -eq 0 ] && cp $DIR/WPC*/*pCASL* $TARGET_DIR/asl 2>&1 | tee -a $LOG_FILE 
+	
+	check_dir $DIR diff_35 ; q=$?
+	[ $q -eq 0 ] && mkdir $TARGET_DIR/diff_35 >& /dev/null
+	[ $q -eq 0 ] && mv $TARGET_DIR/*diff35* $TARGET_DIR/diff_35 2>&1 | tee -a $LOG_FILE
+
+	check_dir $DIR diff_70  ; q=$?
+	[ $q -eq 0 ] && mkdir $TARGET_DIR/diff_70 >& /dev/null
+	[ $q -eq 0 ] && mv $TARGET_DIR/*diff70* $TARGET_DIR/diff_70 2>&1 | tee -a $LOG_FILE
+
+	check_dir $DIR diff_105 ; q=$?
+	[ $q -eq 0 ] && mkdir $TARGET_DIR/diff_105 >& /dev/null
+	[ $q -eq 0 ] && mv $TARGET_DIR/*diff105* $TARGET_DIR/diff_105 2>&1 | tee -a $LOG_FILE
+
+	mkdir $TARGET_DIR/physio >& /dev/null
+	cp $DIR/BHV*/*.* $TARGET_DIR/physio 2>&1 | tee -a $LOG_FILE
+
+	#clean up
+	rm $TARGET_DIR/*.nii 2>&1 | tee -a $LOG_FILE
+	
+	# renaming files
+	for SD in $TARGET_DIR/*
+	do
+		SF=$(basename $SD)
+		SUBJECT="diamond_$USERNAME"
+		FL=($SD/*.nii)
+		AP=1
+		if [ "${#FL[@]}" -eq 2 ]  && [[ ${FL[0]} == *"fieldmap"* ]]; then
+			mv ${FL[0]} $SD/${SUBJECT}_${SF}_mag.nii 2> /dev/null	
+			mv ${FL[1]} $SD/${SUBJECT}_${SF}_phase.nii 2> /dev/null
+		elif [ "${#FL[@]}" -eq 2 ]  && [[ ${FL[0]} == *"diff"* ]]; then
+			AP=0
+			mkdir $SD/temp
+			mv $SD/*diff*AP*.nii $SD/temp/${SUBJECT}_${SF}_AP.nii 2> /dev/null	
+			mv $SD/*diff*AP*.bvec $SD/temp/${SUBJECT}_${SF}_AP.bvec 2> /dev/null	
+			mv $SD/*diff*AP*.bval $SD/temp/${SUBJECT}_${SF}_AP.bval 2> /dev/null	
+			mv $SD/*diff*.nii $SD/temp/${SUBJECT}_${SF}_PA.nii 2> /dev/null	
+			mv $SD/*diff*.bvec $SD/temp/${SUBJECT}_${SF}_PA.bvec 2> /dev/null	
+			mv $SD/*diff*.bval $SD/temp/${SUBJECT}_${SF}_PA.bval 2> /dev/null	
+			mv $SD/temp/* $SD/
+			rmdir $SD/temp
+		elif [ "${#FL[@]}" -eq 1 ]; then
+			mv ${FL[0]} $SD/${SUBJECT}_${SF}.nii 2> /dev/null
+		elif [ "${#FL[@]}" -eq 3 ] && [[ ${FL[0]} == *"T1"* ]]; then
+			mv ${FL[0]} $SD/${SUBJECT}_${SF}_crop.nii 2> /dev/null
+			mv ${FL[1]} $SD/${SUBJECT}_${SF}_orient.nii 2> /dev/null
+			mv ${FL[2]} $SD/${SUBJECT}_${SF}.nii 2> /dev/null
+		else
+			N=1
+			for F in ${FL[@]}
+			do 
+				mv $F $SD/${SUBJECT}_${SF}.${N}.nii 2> /dev/null 
+				N=$[$N + 1]
+			done
+		fi
+		mv $SD/*_ref.hdr $SD/${SUBJECT}_${SF}_ref.hdr 2> /dev/null
+		mv $SD/*_ref.img $SD/${SUBJECT}_${SF}_ref.img 2> /dev/null
+		mv $SD/*MB.hdr $SD/${SUBJECT}_${SF}.hdr 2> /dev/null
+		mv $SD/*MB.img $SD/${SUBJECT}_${SF}.img 2> /dev/null
+		if [ "${AP}" -eq 1 ]; then
+			mv $SD/*.bvec $SD/${SUBJECT}_${SF}.bvec 2> /dev/null
+			mv $SD/*.bval $SD/${SUBJECT}_${SF}.bval 2> /dev/null
+		fi
+		mv $SD/*.edat2 $SD/${SUBJECT}_${SF}_task.edat2 2> /dev/null
+		mv $SD/*.edat $SD/${SUBJECT}_${SF}_task.edat 2> /dev/null
+		mv $SD/*.txt $SD/${SUBJECT}_${SF}_task.txt 2> /dev/null
+		mv $SD/*.ecg $SD/${SUBJECT}_${SF}.ecg 2> /dev/null
+		mv $SD/*.ext $SD/${SUBJECT}_${SF}.ext 2> /dev/null
+		mv $SD/*.puls $SD/${SUBJECT}_${SF}.puls 2> /dev/null
+		mv $SD/*.resp $SD/${SUBJECT}_${SF}.resp 2> /dev/null
+	done
+	
+	
+	# copy Post directory content	
+	mkdir $TARGET_DIR/post
+	cp $DIR/BHV*/Post/emotion*  $TARGET_DIR/post 2>&1 | tee -a $LOG_FILE
+	cp $DIR/BHV*/Post/PostTaskFraming* $TARGET_DIR/post 2>&1 | tee -a $LOG_FILE
+	
+	
+	for EPRIME_FILE in `find $TARGET_DIR -name '*.edat*'`
+	do
+		EPRIME_FILE=${EPRIME_FILE%.*}.txt
+		# convert E-Prime files to UTF-8
+		# check if eprime is utf-16
+		file -i ${EPRIME_FILE} | grep -q utf-16
+		if [ $? -eq 0 ]
+		then
+			mv $EPRIME_FILE tmp.txt 
+			iconv -f utf-16 -t utf-8 tmp.txt > ${EPRIME_FILE}
+		fi
+	done
+	
+	# print report
+	echo "  =================================================" 2>&1 | tee -a $LOG_FILE
+	for FL  in $TARGET_DIR/*/*.[nh]*; 
+	do 
+		# skip _ref images
+		echo $FL | grep -q _ref.hdr
+		if [ $? -eq 0 ];then
+			continue;
+		fi
+		FN=$(basename $FL)
+		DM=$(fslhd $FL | grep -E '^dim[1-4]' | awk -F ' ' '{print $2}' |  tr '\n' ' '); 
+		echo -e "  $FN      \t$DM" 2>&1 | tee -a $LOG_FILE
+	done
+	echo "  =================================================" 2>&1 | tee -a $LOG_FILE
+	for D in $TARGET_DIR/*
+	do
+		DD=$(basename $D)
+		DC=$(ls $D| wc -l)
+		echo  -e "  ${DD}:        \t$DC files" 2>&1 | tee -a $LOG_FILE 
+	done
+	echo "  =================================================" 2>&1 | tee -a $LOG_FILE
+	chmod -R a+rwx ${TARGET_DIR}
+	
+	# create logs directory if not there
+	if [ ! -e ${TARGET_DIR}/logs ];
+	then
+		mkdir ${TARGET_DIR}/logs
+	fi
+	cp $LOG_FILE ${TARGET_DIR}/logs
+
+	echo " "
+done
+
+echo "success!"
+exit 0
