@@ -5,7 +5,6 @@
 import sys
 import os                                  
 import re
-import embarc
 import gold
 
 ## Predefined constants ##
@@ -278,31 +277,6 @@ def efnback(directory,sequence):
 	gold.print_save_files(task,pp2.get_node('output'),datasink,("func2","movement2","struct2","mask2"))	
 	gold.print_save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images"))	
 
-	# now define PPI
-	ppi_contrasts = []	
-	#ppi_contrasts.append(("Anger","T",["PPI_Anger"],[1]))
-	#ppi_contrasts.append(("Anger_td","T",["PPI_Anger"],[1]))
-	#pppi_rois  = 	[("left_amygdala",embarc.ROI_L_amyg),
-	#		 ("right_amygdala",embarc.ROI_R_amyg),
-	#		 ("left_VLPFC",embarc.ROI_L_VLPFC),
-	#		 ("right_VLPFC",embarc.ROI_R_VLPFC)]	
-
-	# now do gPPI analysis
-	#for roi in pppi_rois:
-	#	pppi = pe.Node(interface=wrap.PPPI(), name="pppi_"+roi[0])
-	#	pppi.inputs.voi_name = roi[0]
-	#	pppi.inputs.voi_file = roi[1]
-	#	pppi.inputs.subject = subject
-	#	task.connect(l1,'output.spm_mat_file',pppi,'spm_mat_file')
-	#	
-	#	contrast = pe.Node(interface = spm.EstimateContrast(), name="contrast"+roi[0])
-	#	contrast.inputs.contrasts = ppi_contrasts
-	#	task.connect(pppi,'spm_mat_file',contrast,'spm_mat_file')
-	#	task.connect(pppi,'beta_images',contrast,'beta_images')
-	#	task.connect(pppi,'residual_image',contrast,'residual_image')
-	#	task.connect(contrast,'con_images',datasink,"data.pppi_"+roi[0]+"_con_images")
-	#	task.connect(pppi,"spm_mat_file",datasink,"data.ppi_"+roi[0]+"_spm_file")
-	
 	
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
 	return task
@@ -319,8 +293,7 @@ def dynamic_faces(directory,sequence):
 	import nipype.interfaces.utility as util     # utility
 	import nipype.interfaces.io as nio           # Data i/o
 	import gold
-	import embarc	
-
+	
 	subject = get_subject(directory)
 	# define base directory
 	base_dir = os.path.abspath(directory+"/analysis/")
@@ -358,7 +331,7 @@ def dynamic_faces(directory,sequence):
 	
 	# mCompCor
 	cc = pe.Node(interface=wrap.mCompCor(), name="mCompCor")
-	cc.inputs.white_mask = embarc.ROI_white
+	cc.inputs.white_mask = conf.ROI_white
 
 	# create DesignMatrix
 	dm = pe.Node(name="create_DM",interface=Function(input_names=["matlab_function","eprime_file"],
@@ -392,10 +365,10 @@ def dynamic_faces(directory,sequence):
 
 	#ppi_contrasts.append(("Anger_td","T",["PPI_Anger"],[1]))
 	
-	pppi_rois  = 	[("left_amygdala",embarc.ROI_L_amyg),
-			 ("right_amygdala",embarc.ROI_R_amyg),
-			 ("left_VLPFC",embarc.ROI_L_VLPFC),
-			 ("right_VLPFC",embarc.ROI_R_VLPFC)]	
+	pppi_rois  = 	[("left_amygdala",conf.ROI_L_amyg),
+			 ("right_amygdala",conf.ROI_R_amyg),
+			 ("left_VLPFC",conf.ROI_L_VLPFC),
+			 ("right_VLPFC",conf.ROI_R_VLPFC)]	
 
 	# now do gPPI analysis
 	for roi in pppi_rois:
@@ -494,8 +467,6 @@ def resting(directory,sequence):
 	reho.inputs.inputspec.cluster_size = 27
 	
 	nc = CPAC.network_centrality.create_resting_state_graphs(wf_name='network_centrality')
-	#nc.inputs.centrality_options.method_options=[True, True]
-	#nc.inputs.centrality_options.weight_options=[True, True]
 	nc.inputs.inputspec.method_option=0
 	nc.inputs.inputspec.weight_options=[True, True]	
 	nc.inputs.inputspec.threshold_option = 1
@@ -625,7 +596,6 @@ def resting(directory,sequence):
 def preprocess(directory,sequence):
 	import nipype.pipeline.engine as pe          # pypeline engine
 	import nipype.interfaces.io as nio           # Data i/o
-	import embarc
 	import gold
 
 	# define base directory
@@ -761,7 +731,7 @@ if __name__ == "__main__":
 	if check_sequence(opt_list,directory,"resting_state"):
 		log.info("\n\nRESTING pipeline ...\n\n")
 		t = time.time()		
-		resting1 = resting(directory)
+		resting1 = resting(directory,"resting_state")
 		resting1.run()
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
