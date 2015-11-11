@@ -63,18 +63,157 @@ def subset(x,i):
 	return x[i]	
 
 
-# run resting sequence
-def resting(directory):
-	import embarc
-	ds = datasource(directory,"resting_state_hr")
-	return embarc.resting(directory,"resting_state_hr",get_subject(directory),ds)
+"""
+EMBARC 1.0 Resting Sequence Ex: resting1/resting2
+directory - dataset directory
+sequence  - name of the sequence
+subject   - optional subject name if None, embarc subject will be derived
+ds		  - DataSource node for this dataset, if None embarc will be used
 
+"""
+def resting(directory,sequence):
+	import nipype.pipeline.engine as pe          # pypeline engine
+	import CPAC					# import CPAC nuisance
+	import nipype.interfaces.fsl as fsl          # fsl
+	import wrappers as wrap	
+	import nipype.interfaces.afni as afni		 # afni
+	from nipype.interfaces.utility import Function
+	import nipype.interfaces.io as nio           # Data i/o
+	import nipype.algorithms.misc as misc
+	import gold	
+	
+	# define base directory
+	base_dir = os.path.abspath(directory+"/analysis/")
+	if not os.path.exists(base_dir):
+		os.makedirs(base_dir)
+	out_dir = os.path.abspath(directory+"/output/"+sequence)
+	if not os.path.exists(out_dir):
+		os.makedirs(out_dir)
+	subject = get_subject(directory)
+	
+	
+	
+	# setup some constants
+	resting_roi_names = ['LeftInsula','RightInsula','LeftAmygdala',
+			     'RightAmygdala','LeftVS','RightVS','LeftBA9','RightBA9',
+			     'BR1','BR2','BR3','BR4','BR9']
+	resting_roi_images = [conf.ROI_L_insula,conf.ROI_R_insula,conf.ROI_L_amyg,conf.ROI_R_amyg,
+			conf.ROI_VS_L,conf.ROI_VS_R,conf.ROI_BA9_L,conf.ROI_BA9_R,
+			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9]
+	
+	ds = datasource(directory,sequence)
+	pp = gold.preprocess(conf)
+	
+	nu = pe.Node(interface=wrap.Nuisance(), name="nuisance")
+	nu.inputs.white_mask = conf.ROI_white
+
+	glm = pe.Node(interface=fsl.GLM(), name="glm")
+	glm.inputs.out_res_name = "residual.4d.nii"
+	
+	filt = pe.Node(interface=fsl.ImageMaths(), name="filter")
+	#filt.inputs.op_string = ' -bptf 128 12.5 '
+	filt.inputs.op_string = ' -bptf 37 4.167'
+	filt.inputs.terminal_output = 'none'
+	
+	alff = dict()
+	alff_nm = []
+	for hl in [[0.01,0.1],[0.01,0.027],[0.027,0.073]]:
+		nm = "ALFF"+str(hl[1]).replace("0.","_")
+		alff_nm.append(nm)		
+		alff[nm] = CPAC.alff.create_alff(wf_name=nm.lower())
+		alff[nm].inputs.hp_input.hp = hl[0]
+		alff[nm].inputs.lp_input.lp = hl[1]
+	
+	reho = CPAC.reho.create_reho()
+	reho.inputs.inputspec.cluster_size = 27
+	
+	nc = CPAC.network_centrality.create_resting_state_graphs(wf_name='network_centrality')
+	nc.inputs.inputspec.method_option=0
+	nc.inputs.inputspec.weight_options=[True, True]	
+	nc.inputs.inputspec.threshold_option = 1
+	nc.inputs.inputspec.threshold = 0.0744 
+	nc.inputs.inputspec.template = conf.OASIS_labels
+	zscore =  CPAC.network_centrality.get_zscore(wf_name='z_score')
+	
+	sca = dict()
+	maskave = dict()
+	gunzip = dict()
+	
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:
+		sca[mask] = CPAC.sca.create_sca(name_sca="sca_"+mask);
+		maskave[mask] = pe.Node(interface=afni.Maskave(),name="roi_ave_"+mask)
+		maskave[mask].inputs.outputtype = "NIFTI"
+		maskave[mask].inputs.quiet= True
+		maskave[mask].inputs.mask = resting_roi_images[resting_roi_names.index(mask)]
+		gunzip[mask] = pe.Node(interface=misc.Gunzip(),name="gunzip_"+mask)
+	
+	roiave = pe.MapNode(interface=afni.Maskave(),name="roi_ave",iterfield="mask")
+	roiave.inputs.outputtype = "NIFTI"
+	roiave.inputs.mask = resting_roi_images
+	roiave.inputs.quiet= True
+
+	corroi = pe.Node(interface=wrap.CorrelateROIs(),name="corr_roi")
+	corroi.inputs.roi_names = resting_roi_names
+	corroi.inputs.task_name = "Resting_State"
+	corroi.inputs.out_file = subject+"_"+sequence+"_outcomes_CORR.csv"
+
+	
+	datasink = pe.Node(nio.DataSink(), name='datasink')
+	datasink.inputs.base_directory = out_dir
+	
+
+	task = pe.Workflow(name=sequence)
+	task.base_dir = base_dir
+	
+	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
+	task.connect([(pp,nu,[('output.ufunc','source'),
+						 ('output.mask','brain_mask'),
+						 ('output.movement','movement')])])
+	task.connect(nu,"regressors",glm,"design")
+	task.connect(pp,"output.func",glm,"in_file")
+	task.connect(glm,"out_res",filt,"in_file")
+	
+	task.connect(filt,"out_file",roiave,"in_file")
+	task.connect(roiave,"out_file",corroi,"in_files")
+		
+	
+	for nm in alff_nm:
+		task.connect(glm,'out_res',alff[nm],'inputspec.rest_res')
+		task.connect(pp,'output.mask',alff[nm],'inputspec.rest_mask')	
+
+	task.connect(filt,"out_file",reho,"inputspec.rest_res_filt")
+	task.connect(pp,"output.mask",reho,"inputspec.rest_mask")
+	
+	task.connect(glm,'out_res',nc,'inputspec.subject')
+	task.connect(nc,'outputspec.centrality_outputs',zscore,'inputspec.input_file')
+	task.connect(pp,'output.mask',zscore,'inputspec.mask_file')
+
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:
+		task.connect(filt,"out_file",maskave[mask],"in_file")
+		task.connect(filt,"out_file",sca[mask],"inputspec.functional_file")
+		task.connect(maskave[mask],"out_file",sca[mask],"inputspec.timeseries_one_d")
+		task.connect(sca[mask],("outputspec.Z_score",subset,0),gunzip[mask],'in_file')
+		task.connect(sca[mask],"outputspec.Z_score",datasink,"data.sca."+mask)
+	
+	
+	task.connect(reho,"outputspec.z_score",datasink,"data.reho")
+	task.connect(corroi,"out_file",datasink,"csv.@par5")
+	for nm in alff_nm:	
+		task.connect(alff[nm],"outputspec.alff_Z_img",datasink,"data."+nm.lower())
+	
+	task.connect(zscore,"outputspec.z_score_img",datasink,"data.nc")
+	
+
+	# print and save the output of the preprocess pipeline
+	gold.print_save_files(task,pp.get_node('output'),datasink,("func","movement","struct","mask"))	
+	
+	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
+	return task
 
 # run simply preprocessing
 def preprocess(directory,sequence):
 	import nipype.pipeline.engine as pe          # pypeline engine
 	import nipype.interfaces.io as nio           # Data i/o
-	import embarc
 	import gold
 
 	# define base directory
@@ -199,8 +338,8 @@ if __name__ == "__main__":
 	if check_sequence(opt_list,directory,"resting_state_hr"):
 		log.info("\n\nRESTING pipeline ...\n\n")
 		t = time.time()		
-		resting1 = resting(directory)
-		resting1.run()
+		resting1 = resting(directory,"resting_state_hr")
+		resting1.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	

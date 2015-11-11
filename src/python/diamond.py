@@ -670,7 +670,7 @@ if __name__ == "__main__":
 		log.info("\n\nREWARD pipeline ...\n\n")
 		t = time.time()		
 		reward = reward(directory,"reward")
-		reward.run()
+		reward.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
 		#reward = preprocess(directory,"reward_2")
 		#reward.run()
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
@@ -680,7 +680,7 @@ if __name__ == "__main__":
 		log.info("\n\nRESTING pipeline ...\n\n")
 		t = time.time()		
 		resting1 = resting(directory,"resting_state")
-		resting1.run()
+		resting1.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	if check_sequence(opt_list,directory,"efnback"):
