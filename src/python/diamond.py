@@ -362,13 +362,22 @@ def dynamic_faces(directory,sequence):
 	ppi_contrasts.append(("Fear","T",["PPI_Fear"],[1]))
 	ppi_contrasts.append(("Sad","T",["PPI_Sad"],[1]))
 	ppi_contrasts.append(("Happy","T",["PPI_Happy"],[1]))
-
+	#ppi_contrasts.append(("Shape","T",["PPI_Shape"],[1]))
+ 	ppi_contrasts.append(("Emotion > Shape","T",["PPI_Anger","PPI_Fear","PPI_Sad","PPI_Happy","PPI_Shape"],[.25,.25,.25,.25,-1]))
+	ppi_contrasts.append(("EmotionNeg > Shape","T",["PPI_Anger","PPI_Fear","PPI_Sad","PPI_Shape"],[.33,.33,.33,-1]))
+	ppi_contrasts.append(("EmotionNeg > Happy","T",["PPI_Anger","PPI_Fear","PPI_Sad","PPI_Happy"],[.33,.33,.33,-1]))
+	#ppi_contrasts.append(("Emotion > Shape","T",["Anger(1)","Fear(1)","Sad(1)","Happy(1)","Shape(1)"],[.25,.25,.25,.25,-1]))
 	#ppi_contrasts.append(("Anger_td","T",["PPI_Anger"],[1]))
 	
 	pppi_rois  = 	[("left_amygdala",conf.ROI_L_amyg),
 			 ("right_amygdala",conf.ROI_R_amyg),
 			 ("left_VLPFC",conf.ROI_L_VLPFC),
-			 ("right_VLPFC",conf.ROI_R_VLPFC)]	
+			 ("right_VLPFC",conf.ROI_R_VLPFC),	
+ 			 ("beckmann_region_1",conf.ROI_BR1),
+			 ("beckmann_region_2",conf.ROI_BR2),
+			 ("beckmann_region_3",conf.ROI_BR3),
+			 ("beckmann_region_4",conf.ROI_BR4),
+			 ("bilateral_amygdala",conf.ROI_amygdala_LR)	]
 
 	# now do gPPI analysis
 	for roi in pppi_rois:
@@ -671,25 +680,21 @@ if __name__ == "__main__":
 		t = time.time()		
 		reward = reward(directory,"reward")
 		reward.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
-		#reward = preprocess(directory,"reward_2")
-		#reward.run()
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	
 	if check_sequence(opt_list,directory,"resting_state"):
 		log.info("\n\nRESTING pipeline ...\n\n")
 		t = time.time()		
-		resting1 = resting(directory,"resting_state")
-		resting1.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
+		resting = resting(directory,"resting_state")
+		resting.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	if check_sequence(opt_list,directory,"efnback"):
 		log.info("\n\nEFNBACK pipeline ...\n\n")
 		t = time.time()		
-		efnback = preprocess(directory,"efnback_1")
-		efnback.run()
-		efnback = preprocess(directory,"efnback_2")
-		efnback.run()
+		efnback = efnback(directory,"efnback")
+		efnback.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	
