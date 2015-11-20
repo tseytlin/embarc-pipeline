@@ -15,14 +15,15 @@ TARGET="${!#}"
 
 # copy/convert E-Prime text files
 function cp_conv() {
-	file -i $1 | grep -q utf-16
-   	if [ $? -eq 0 ]; then
+	ENC=$(file -i $1 | grep -o 'utf-16.*')
+   	if [-n "${ENC}" ]; then
    		T=$(basename $1)
-		iconv -f utf-16 -t utf-8 $1 > $2/$T	
+		iconv -f $ENC -t utf-8 $1 > $2/$T	
     else
     	cp $1 $2
     fi	
 }
+
 
 function check_dir (){
 	ls -d ${1}/${2}* >& /dev/null
