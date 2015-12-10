@@ -8,7 +8,7 @@ PROG=`basename $0`
 if [ -z $2 ];
 then
     echo "Usage: ${PROG} <dir1> [dir2] ... [dirN] <target dir>"
-    echo "Transfer diamond data to a unified directory structure"    
+    echo "Transfer encore data to a unified directory structure"    
 	exit 1
 fi
 TARGET="${!#}"
@@ -132,7 +132,7 @@ do
 	for SD in $TARGET_DIR/*
 	do
 		SF=$(basename $SD)
-		SUBJECT="diamond_$USERNAME"
+		SUBJECT="encore_$USERNAME"
 		FL=($SD/*.nii)
 		AP=1
 		if [ "${#FL[@]}" -eq 2 ]  && [[ ${FL[0]} == *"fieldmap"* ]]; then
