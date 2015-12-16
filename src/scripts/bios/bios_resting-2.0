@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Henry Chase (University of Pittsburgh), 
 # Eugene Tseytlin (University of Pittsburgh)
 # init project variables
@@ -7,10 +7,8 @@ VERSION="2.0"
 SCRIPT_DIR=`dirname $0`
 PROG_FILE=`basename $0`
 #. "${SCRIPT_DIR}/project.properties"
-. /raid/r3/p1/Phillips/projects/Eugene/projects/EMBARC/project.properties
-export PATH=/usr/local/pkg/afni_2013:$PATH
-
-
+#. /raid/r3/p1/Phillips/projects/Eugene/projects/EMBARC/project.properties
+#export PATH=/usr/local/pkg/afni_2013:$PATH
 
 #embarc.py $@
 
@@ -20,7 +18,7 @@ export PATH=/usr/local/pkg/afni_2013:$PATH
 if [ -z $1 ];
 then
     PROG=`basename $0` 
-    echo "Usage: ${PROG} [-asl|-ert|-reward|-resting1|-resting2|-flt] <dir1> ...[dirN]"
+    echo "Usage: ${PROG} <dir1> ...[dirN]"
     echo "Run an EMBARC 2.0 analysis pipeline on the set of subject data directories." 
 exit 1
 fi
@@ -28,12 +26,6 @@ FLAGS=""
 # go over each dataset one at a time
 for DATA_DIR in $@
 do
-	# skip some flags
-	if [ $DATA_DIR == "-asl" -o $DATA_DIR == "-reward" -o $DATA_DIR == "-resting1" -o $DATA_DIR == "-resting2" -o $DATA_DIR == "-ert" -o $DATA_DIR == "-flt" ];
-	then
-		FLAGS="${FLAGS} ${DATA_DIR}"
-		continue
-	fi	
 	
 	# get some info
 	NAME=`basename $DATA_DIR`

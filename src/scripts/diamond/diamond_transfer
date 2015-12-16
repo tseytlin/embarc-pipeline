@@ -170,7 +170,7 @@ do
 	do
 		SF=$(basename $SD)
 		SUBJECT="diamond_$USERNAME"
-		FL=($SD/*.nii)
+		FL=(`ls -t $SD/*.nii 2> /dev/null`)
 		AP=1
 		if [ "${#FL[@]}" -eq 2 ]  && [[ ${FL[0]} == *"fieldmap"* ]]; then
 			mv ${FL[0]} $SD/${SUBJECT}_${SF}_mag.nii 2> /dev/null	
