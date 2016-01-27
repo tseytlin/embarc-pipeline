@@ -106,10 +106,13 @@ do
 	
 	check_dir $DIR rs; q=$?
 	[ $q -eq 0 ] && mkdir $TARGET_DIR/resting_state_me >& /dev/null
-	#mv $TARGET_DIR/*restingstate*.nii $TARGET_DIR/resting_state 2>&1 | tee -a $LOG_FILE
-	[ $q -eq 0 ] && cp $DIR/WPC*/rs_*.* $TARGET_DIR/resting_state_me 2>&1 | tee -a $LOG_FILE 
+	[ $q -eq 0 ] && cp $DIR/WPC*/*nstruction_*.* $TARGET_DIR/resting_state_me 2>&1 | tee -a $LOG_FILE 
 	
-	
+	check_dir $DIR rs; q=$?
+	[ $q -eq 0 ] && mkdir $TARGET_DIR/resting_state_hr >& /dev/null
+	[ $q -eq 0 ] && cp $DIR/WPC*/rs_*.* $TARGET_DIR/resting_state_hr 2>&1 | tee -a $LOG_FILE 	
+
+
 	check_dir $DIR diff_35 ; q=$?
 	[ $q -eq 0 ] && mkdir $TARGET_DIR/diff_35 >& /dev/null
 	[ $q -eq 0 ] && mv $TARGET_DIR/*diff35* $TARGET_DIR/diff_35 2>&1 | tee -a $LOG_FILE
@@ -133,7 +136,7 @@ do
 	do
 		SF=$(basename $SD)
 		SUBJECT="encore_$USERNAME"
-		FL=($SD/*.nii)
+		FL=(`ls -t $SD/*.nii 2> /dev/null`)
 		AP=1
 		if [ "${#FL[@]}" -eq 2 ]  && [[ ${FL[0]} == *"fieldmap"* ]]; then
 			mv ${FL[0]} $SD/${SUBJECT}_${SF}_mag.nii 2> /dev/null	
