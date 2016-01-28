@@ -1,6 +1,5 @@
 #!/bin/bash
 # rename anatomical slides
-ANAT=anat
 
 function rename () {
 	SOURCE=$1
@@ -15,13 +14,13 @@ function rename () {
 }
 
 # go over all parameters and find all anat directory
-for DIR in $(find $@ -name ${ANAT} -type d)
+for DIR in $(find $@ -name 'anat*' -type d)
 do
 	# get the files of interest
 	cd $DIR	
-	ORIG=$(ls *_anat.nii*)
-	ORIENT=$(ls *_anat_orient.nii*)
-	CROP=$(ls *_anat_crop.nii*)
+	ORIG=$(ls *_anat.nii* 2> /dev/null)
+	ORIENT=$(ls *_anat_orient.nii* 2> /dev/null)
+	CROP=$(ls *_anat_crop.nii* 2> /dev/null)
 
 	if [ -z $CROP ]; then
 		continue;
