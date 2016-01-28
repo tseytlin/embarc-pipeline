@@ -103,7 +103,7 @@ output:
 	movement - realign movement parameters
 	struct - structural processed image
 """
-def preprocess(config):
+def preprocess(config,name='preprocess'):
 	import nipype.interfaces.spm as spm          # spm
 	import nipype.interfaces.fsl as fsl          # fsl
 	import nipype.interfaces.utility as util     # utility
@@ -113,7 +113,7 @@ def preprocess(config):
 	fsl.FSLCommand.set_default_output_type('NIFTI')
 	
 	
-	preproc = pe.Workflow(name='preprocess')
+	preproc = pe.Workflow(name=name)
 
 	inputnode = pe.Node(interface=util.IdentityInterface(fields=['func','struct']),name='input')
 

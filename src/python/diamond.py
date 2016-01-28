@@ -61,7 +61,7 @@ def datasource(directory, sequence):
 	datasource = pe.Node(interface=nio.DataGrabber(
 						 infields=['subject_id','sequence'], 
 						 outfields=['func', 'struct','behav']),
-	                     name = 'datasource')
+	                     name = "datasource_"+sequence)
 	datasource.inputs.base_directory = os.path.abspath(directory)
 	datasource.inputs.template = '*'
 	datasource.inputs.field_template = field_template
@@ -224,14 +224,56 @@ def efnback(directory,sequence):
 		
 	# some hard-coded sequence specific components
 	contrasts = []	
-	
+	contrasts.append(("0back fear-noface","T",
+			["Sn(1)zerofear*bf(1)","Sn(2)zerofear*bf(1)","Sn(1)zeroblank*bf(1)",
+			"Sn(2)zeroblank*bf(1)"],[.5, .5,-.5,-.5]))
+	"""	
+	contrasts.append(("0back fear-neutface","T",
+			["Sn(1)zerofear*bf(1)","Sn(2)zerofear*bf(1)","Sn(1)zeroneutral*bf(1)",
+	"Sn(2)zeroneutral*bf(1)"],[.5, .5,-.5,-.5]))
+	contrasts.append(("0back hap-noface","T",["Sn(1)zerohappy*bf(1)","Sn(2)zerohappy*bf(1)","Sn(1)zeroblank*bf(1)", 
+	"Sn(2)zeroblank*bf(1)"],[.5, .5,-.5,-.5]))
+	contrasts.append(("0back hap-neutface","T",["Sn(1)zerohappy*bf(1)","Sn(2)zerohappy*bf(1)", "Sn(1)zeroneutral*bf(1)",
+	"Sn(2)zeroneutral*bf(1)"],[.5, .5,-.5,-.5]))
+	contrasts.append(("0back neut-noface","T",["Sn(1)zeroneutral*bf(1)","Sn(2)zeroneutral*bf(1)","Sn(1)zeroblank*bf(1)",
+	"Sn(2)zeroblank*bf(1)],[.5, .5,-.5,-.5]))
+	contrasts.append(("2back fear-noface","T",["Sn(1)twofear*bf(1)","Sn(2)twofear*bf(1)","Sn(1)twolank*bf(1)",
+	"Sn(2)twoblank*bf(1)],[.5, .5,-.5,-.5]))
+	contrasts.append(("2back fear-neutface","T",["Sn(1)twofear*bf(1)","Sn(2)twofear*bf(1)","Sn(1)twoneutral*bf(1)",
+	"Sn(2)twoneutral*bf(1)],[.5, .5,-.5,-.5]))
+	contrasts.append(("2back hap-noface","T",["Sn(1)twohappy*bf(1)","Sn(2)twohappy*bf(1)","Sn(1)twoblank*bf(1)",
+	"Sn(2)twoblank*bf(1)],[.5, .5,-.5,-.5]))
+	contrasts.append(("2back happy-neutface","T",["Sn(1)twohappy*bf(1)","Sn(2)twohappy*bf(1)","Sn(1)twoneutral*bf(1)",
+	"Sn(2)twoneautral*bf(1)],[.5, .5,-.5,-.5]))
+	contrasts.append(("2back noface-0back noface","T",["Sn(1)twoblank*bf(1)","Sn(2)twoblank*bf(1)","Sn(1)zeroblank*bf(1)",
+	"Sn(2)zeroblank*bf(1)],[.5, .5,-.5,-.5]))
+	contrasts.append(("2back neutral-0back neutral","T",["Sn(1)twoneautral*bf(1)","Sn(2)twoneutral*bf(1)",
+	"Sn(1)zeroneutal*bf(1)","Sn(2)zeroneutral*bf(1)],[.5, .5,-.5,-.5]))
+	contrasts.append(("2backfear-0back fear","T",["Sn(1)twofear*bf(1)","Sn(2)twofear*bf(1)","Sn(1)zerofear*bf(1)",
+	"Sn(2)zerofear*bf(1)],[.5, .5,-.5,-.5]))
+	contrasts.append(("2back happy-0back happy","T",["Sn(1)twohappy*bf(1)","Sn(2)twohappy*bf(1)","Sn(1)zerohappy*bf(1)",
+	"Sn(2)zerohappy*bf(1)],[.5, .5,-.5,-.5]))
+	contrasts.append(("2backemotion-2backnoface","T",["Sn(1)twofear*bf(1)","Sn(2)twofear*bf(1)","Sn(1)twohappy*bf(1)",
+	"Sn(2)twohappy*bf(1)","Sn(1)twoblank*bf(1)","Sn(2)twoblank*bf(1)],[.5,.5,.5,.5,-1,-1]))
+	contrasts.append(("0backemotion-0backnoface","T",["Sn(1)zerofear*bf(1)","Sn(2)zerofear*bf(1)","Sn(1)zerohappy*bf(1)",
+	"Sn(2)zerohappy*bf(1)","Sn(1)zeroblank*bf(1)","Sn(2)zeroblank*bf(1)],[.5,.5,.5,.5,-1,-1]))
+	contrasts.append(("2backemotion-2backneutral","T",["Sn(1)twofear*bf(1)","Sn(2)twofear*bf(1)","Sn(1)twohappy*bf(1)",
+	"Sn(2)twohappy*bf(1)","Sn(1)twoneutral*bf(1)","Sn(2)twoneutral*bf(1)],[.5,.5,.5,.5,-1,-1]))
+	contrasts.append(("0backemotion-0backnoface","T",["Sn(1)zerofear*bf(1)","Sn(2)zerofear*bf(1)","Sn(1)zerohappy*bf(1)",
+	"Sn(2)zerohappy*bf(1)","Sn(1)zerobneutral*bf(1)","Sn(2)zeroneutral*bf(1)],[.5,.5,.5,.5,-1,-1]))	
+	"""
+
+		
+
+
 	# get components
 	ds1 = datasource(directory,sequence+"_1")
 	ds2 = datasource(directory,sequence+"_2")
 	
-	pp1 = gold.preprocess(conf)
-	pp2 = gold.preprocess(conf)
-		
+	pp1 = gold.preprocess(conf,"preprocess_1")
+	pp2 = gold.preprocess(conf,"preprocess_2")
+	
+	
 	l1 = gold.level1analysis(conf);
 	l1.inputs.input.contrasts = contrasts
 	
@@ -245,9 +287,9 @@ def efnback(directory,sequence):
 	dm2.inputs.matlab_function = "efnback_eprime2dm"
 
 	# setup merge points
-	merge_func = pe.Node(name="merge_func",interface=util.Merge())
-	merge_nDM = pe.Node(name="merge_nDM",interface=util.Merge())
-	merge_move = pe.Node(name="merge_movement",interface=util.Merge())
+	merge_func = pe.Node(name="merge_func",interface=util.Merge(2))
+	merge_nDM = pe.Node(name="merge_nDM",interface=util.Merge(2))
+	merge_move = pe.Node(name="merge_movement",interface=util.Merge(2))
 		
 		
 	# connect components into a pipeline
@@ -265,7 +307,7 @@ def efnback(directory,sequence):
 	task.connect(dm2,'design_matrix',merge_nDM,'in2')
 
 	task.connect(merge_move,"out",l1,"input.movement")	
-	task.connect(mere_func,'out',l1,'input.func')
+	task.connect(merge_func,'out',l1,'input.func')
 	task.connect(merge_nDM,'out',l1,"input.design_matrix")
 	
 	# define datasink
@@ -273,8 +315,8 @@ def efnback(directory,sequence):
 	datasink.inputs.base_directory = out_dir
 
 	# print and save the output of the preprocess pipeline
-	gold.print_save_files(task,pp1.get_node('output'),datasink,("func1","movement1","struct1","mask1"))	
-	gold.print_save_files(task,pp2.get_node('output'),datasink,("func2","movement2","struct2","mask2"))	
+	gold.print_save_files(task,pp1.get_node('output'),datasink,("struct","mask"))	
+	gold.print_save_files(task,l1.get_node('input'),datasink,("func","movement"))	
 	gold.print_save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images"))	
 
 	
