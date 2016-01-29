@@ -173,8 +173,8 @@ do
 		FL=(`ls -t $SD/*.nii 2> /dev/null`)
 		AP=1
 		if [ "${#FL[@]}" -eq 2 ]  && [[ ${FL[0]} == *"fieldmap"* ]]; then
-			mv ${FL[0]} $SD/${SUBJECT}_${SF}_mag.nii 2> /dev/null	
-			mv ${FL[1]} $SD/${SUBJECT}_${SF}_phase.nii 2> /dev/null
+			mv ${FL[0]} $SD/${SUBJECT}_${SF}_phase.nii 2> /dev/null
+			mv ${FL[1]} $SD/${SUBJECT}_${SF}_mag.nii 2> /dev/null	
 		elif [ "${#FL[@]}" -eq 2 ]  && [[ ${FL[0]} == *"diff"* ]]; then
 			AP=0
 			mkdir $SD/temp
