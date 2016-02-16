@@ -1,0 +1,111 @@
+#!/bin/bash
+# authors: Eugene Tseytlin, Amelia Versace, Tsafrir Goldberg (University of Pittsburgh)
+
+INPUT_PREFIX=$1
+OUTPUT_PREFIX=$2
+SUBJECT_LIST=$3
+
+
+if [ -z $SUBJECT_LIST ]; then
+	echo "Usage: $0 <input dataset prefix> <output dataset prefix> <subject list file>"
+	exit 1;
+fi
+
+
+# go over every subect in the filelist
+for SUBJECT in $(cat $SUBJECT_LIST)
+do
+	# processing one subject at a time, assume that diff_210 was created
+	ls "${INPUT_PREFIX}/*${SUBJECT}/diff_210/*.nii" &> /dev/null
+	if [ $? -ne 0 ]; then
+		echo "skipping $SUBJECT no diff_210 found in ${INPUT_PREFIX}/*${SUBJECT}"
+		continue
+	fi
+	echo "processing $SUBJECT .."
+	
+	IDIR="${INPUT_PREFIX}/*${SUBJECT}/diff_210/"	
+	ODIR="${OUTPUT_PREFIX}/topup/${SUBJECT}"
+	
+	# create output dir
+	mkdir -p $ODIR 2> /dev/null	
+
+
+	# Paste PA and AP bvec and bval:
+	paste  -d ' ' ${IDIR}/*_PA.bval ${IDIR}/*_AP.bval > ${ODIR}/${SUBJECT}_420.bval
+	paste  -d ' ' ${IDIR}/*_PA.bvec ${IDIR}/*_AP.bvec > ${ODIR}/${SUBJECT}_420.bvec
+
+	# Merge PA and AP bvec and bval:
+	fslmerge -t ${ODIR}/${SUJBECT}_420.nii ${IDIR}/*_PA.nii ${IDIR}/*_AP.nii
+
+	# Split merged file for other operation
+	fslsplit ${ODIR}/${SUJBECT}_420.nii ${ODIR}/vol -t
+
+	## Create index file for each subject:
+	# number progressively all the images that 'belong' to the same B0 image 
+	#(in our case B5 image). Ex: 5 700 700 695 705 705 705 705 705 705 705 705 705 
+	#705 705 700 705 700 700 700 5 700 700 705 700 ... will become 
+	#1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 ... We have 13 images and 
+	#after merging the PA with the AP the maximum index number will be 26. 
+	#The index file will likely be the same for all the subjects. TO CHECK MANUALLY!!! 
+	rm $ODIR/index.txt 2> /dev/null
+	
+	N=0
+	J=0
+	VOLS=""
+	for I in `cat ${ODIR}/${SUBJECT}_420.bval`
+	do
+		if [ $I -eq 5 ];then
+			N=$(($N + 1))
+			V=$(printf "%04d\n" $J)
+			VOLS="$VOLS $V"	
+		fi
+		echo -n "$N " >> $ODIR/index.txt
+		J=$(($J + 1))	
+	done
+	echo "" >> $ODIR/index.txt
+
+	# Create a b0s_26.nii.gz file:
+	fslmerge -t ${ODIR}/b0s26.nii $VOLS
+	rm -r ${ODIR}/vol*
+
+	# Run topup (take time --- better in parallel analyses):
+	topup  --imain=${ODIR}/b0s26.nii --datain=${ODIR}/acquisition_parameters.txt --config=b02b0.cnf --out=${ODIR}/topup --iout=${ODIR}/unwarped_b0
+# if image doesn't look great consider --warpres=4
+
+# Run eddy #####eddy works in parallel and takes up a lot of CPU. Must run serial analyses:
+	EDDY="${OUTPUT_PREFIX}/eddy/"	
+	fslmaths ${ODIR}/unwarped_b0 -Tmean ${ODIR}/unwarped_b0 && bet ${ODIR}/unwarped_b0 ${ODIR}/unwarped_b0_brain -m 
+	slicesdir */unwarped_b0_brain.nii 
+	eddy_openmp --imain=${ODIR}/${SUBJECT}_420.nii.gz --mask=${ODIR}/unwarped_b0_brain_mask --acqp=${ODIR}/acquisition_parameters.txt --index=${ODIR}/index.txt --bvecs=${ODIR}/${SUBJECT}_420.bvec --bvals=${ODIR}/${SUBJECT}_420.bval --topup=${ODIR}/topup --out=${EDDY}/${SUBJECT}.openmp --fep --verbose 
+
+# get the first 210 volumes out of /data/dprojects/ENCORE/eddy/${SUBJECT}.nii.gz with fslroi
+	fslroi  ${EDDY}/${SUBJECT}.nii ${SUBJECT}.niis 0 210
+
+## get the 1st 210 bvecs out of /data/dprojects/ENCORE/eddy/${SUBJECT}_eddy_rotate_bvecs --> name it ${SUBJECT}.bvec 
+
+# copy ${SUBJECT}.nii.gz and ${SUBJECT}.bvec in tracula folder: 
+	mkdir -p /'prefix'/tracula/${SUBJECT}/orig 
+	cp ${SUBJECT}.nii.gz ${SUBJECT}.bvec /'prefix'/tracula/${SUBJECT}/orig/.
+	cp /'prefix'/topup/${SUBJECT}/PA/${SUBJECT}_210.bval /'prefix'/tracula/${SUBJECT}/orig/${SUBJECT}.bval
+
+# make sure that freesurfer was done. Must have /'prefix'/freesurfer/${SUBJECT}/mri/apacr+aseg.mgz
+# if not, run freesurfer:
+	mkdir -p /'prefix'/freesurfer/${SUBJECT}/mri/orig
+	mri_convert <1st dicom of mprage> /'prefix'/freesurfer/${SUBJECT}/mri/orig/001.mgz
+	cd /'prefix'/freesurfer
+	recon-all -s ${SUBJECT} -all
+
+# check now if /'prefix'/freesurfer/${SUBJECT}/mri/apacr+aseg.mgz exists now
+
+
+# make script
+	cat /'prefix'/tracula/scripts/dmrirc.template | sed "s/template/${SUBJECT}/g" > /'prefix'/tracula/scripts/dmrirc.${SUBJECT}
+# run tracula
+	cd /'prefix'/tracula
+	trac-all -c scripts/dmrirc.${SUBJECT} -prep -noqa
+	trac-all -c scripts/dmrirc.${SUBJECT} -bedp
+	trac-all -c scripts/dmrirc.${SUBJECT} -path
+
+done
+
+
