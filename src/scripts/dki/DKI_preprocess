@@ -70,38 +70,40 @@ do
 
 	# Run topup (take time --- better in parallel analyses):
 	topup  --imain=${ODIR}/b0s26.nii --datain=${ODIR}/acquisition_parameters.txt --config=b02b0.cnf --out=${ODIR}/topup --iout=${ODIR}/unwarped_b0
-# if image doesn't look great consider --warpres=4
+	# if image doesn't look great consider --warpres=4
 
-# Run eddy #####eddy works in parallel and takes up a lot of CPU. Must run serial analyses:
+	# Run eddy #####eddy works in parallel and takes up a lot of CPU. Must run serial analyses:
 	EDDY="${OUTPUT_PREFIX}/eddy/"	
 	fslmaths ${ODIR}/unwarped_b0 -Tmean ${ODIR}/unwarped_b0 && bet ${ODIR}/unwarped_b0 ${ODIR}/unwarped_b0_brain -m 
-	slicesdir */unwarped_b0_brain.nii 
+	slicesdir ${ODIR}/unwarped_b0_brain.nii 
 	eddy_openmp --imain=${ODIR}/${SUBJECT}_420.nii.gz --mask=${ODIR}/unwarped_b0_brain_mask --acqp=${ODIR}/acquisition_parameters.txt --index=${ODIR}/index.txt --bvecs=${ODIR}/${SUBJECT}_420.bvec --bvals=${ODIR}/${SUBJECT}_420.bval --topup=${ODIR}/topup --out=${EDDY}/${SUBJECT}.openmp --fep --verbose 
 
-# get the first 210 volumes out of /data/dprojects/ENCORE/eddy/${SUBJECT}.nii.gz with fslroi
+	# get the first 210 volumes out of /data/dprojects/ENCORE/eddy/${SUBJECT}.nii.gz with fslroi
 	fslroi  ${EDDY}/${SUBJECT}.nii ${SUBJECT}.niis 0 210
 
-## get the 1st 210 bvecs out of /data/dprojects/ENCORE/eddy/${SUBJECT}_eddy_rotate_bvecs --> name it ${SUBJECT}.bvec 
+	## get the 1st 210 bvecs out of /data/dprojects/ENCORE/eddy/${SUBJECT}_eddy_rotate_bvecs --> name it ${SUBJECT}.bvec 
 
-# copy ${SUBJECT}.nii.gz and ${SUBJECT}.bvec in tracula folder: 
-	mkdir -p /'prefix'/tracula/${SUBJECT}/orig 
-	cp ${SUBJECT}.nii.gz ${SUBJECT}.bvec /'prefix'/tracula/${SUBJECT}/orig/.
-	cp /'prefix'/topup/${SUBJECT}/PA/${SUBJECT}_210.bval /'prefix'/tracula/${SUBJECT}/orig/${SUBJECT}.bval
+	# copy ${SUBJECT}.nii.gz and ${SUBJECT}.bvec in tracula folder: 
+	TDIR="${OUTPUT_PREFIX}/tracula/${SUBJECT}/orig"
+	mkdir -p $TDIR 2> /dev/null 
+	cp ${SUBJECT}.nii ${SUBJECT}.bvec $TDIR
+	cp ${ODIR}/PA/${SUBJECT}_210.bval ${DTDIR}/${SUBJECT}.bval
 
-# make sure that freesurfer was done. Must have /'prefix'/freesurfer/${SUBJECT}/mri/apacr+aseg.mgz
-# if not, run freesurfer:
-	mkdir -p /'prefix'/freesurfer/${SUBJECT}/mri/orig
-	mri_convert <1st dicom of mprage> /'prefix'/freesurfer/${SUBJECT}/mri/orig/001.mgz
-	cd /'prefix'/freesurfer
+	# make sure that freesurfer was done. Must have /'prefix'/freesurfer/${SUBJECT}/mri/apacr+aseg.mgz
+	# if not, run freesurfer:
+	FDIR="${OUTPUT_PREFIX}/freesurfer/${SUBJECT}/mri/orig"
+	mkdir -p $FDIR
+	mri_convert <1st dicom of mprage> ${FDIR}/001.mgz
+	cd ${OUTPUT_PREFIX}/freesurfer
 	recon-all -s ${SUBJECT} -all
 
-# check now if /'prefix'/freesurfer/${SUBJECT}/mri/apacr+aseg.mgz exists now
+	# check now if /'prefix'/freesurfer/${SUBJECT}/mri/apacr+aseg.mgz exists now
 
 
-# make script
-	cat /'prefix'/tracula/scripts/dmrirc.template | sed "s/template/${SUBJECT}/g" > /'prefix'/tracula/scripts/dmrirc.${SUBJECT}
-# run tracula
-	cd /'prefix'/tracula
+	# make script
+	cat ${OUTPUT_PREFIX}/tracula/scripts/dmrirc.template | sed "s/template/${SUBJECT}/g" > ${OUTPUT_PREFIX}/tracula/scripts/dmrirc.${SUBJECT}
+	# run tracula
+	cd ${OUTPUT_PREFIX}/tracula
 	trac-all -c scripts/dmrirc.${SUBJECT} -prep -noqa
 	trac-all -c scripts/dmrirc.${SUBJECT} -bedp
 	trac-all -c scripts/dmrirc.${SUBJECT} -path
