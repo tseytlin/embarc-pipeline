@@ -19,7 +19,7 @@ do
 	DIR=$(cd $DIR;pwd)
 	DIR="${DIR}/"
 	# figure out input site from second directory
-	SITE=$(basename $(dirname $DIR))
+	SITE=pitt
 	SUBJECT=$(basename $DIR)
 	TARGET_DIR="$TARGET/$SITE/$SUBJECT"
 	# create output directory

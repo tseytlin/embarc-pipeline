@@ -8,21 +8,22 @@ PROG=`basename $0`
 if [ -z $2 ];
 then
     echo "Usage: ${PROG} <dir1> [dir2] ... [dirN] <target dir>"
-    echo "Transfer diamond data to a unified directory structure"    
+    echo "Transfer encore data to a unified directory structure"    
 	exit 1
 fi
 TARGET="${!#}"
 
 # copy/convert E-Prime text files
 function cp_conv() {
-	file -i $1 | grep -q utf-16
-   	if [ $? -eq 0 ]; then
+	ENC=$(file -i $1 | grep -o 'utf-16.*')
+   	if [ -n "${ENC}" ]; then
    		T=$(basename $1)
-		iconv -f utf-16 -t utf-8 $1 > $2/$T	
+		iconv -f $ENC -t utf-8 $1 > $2/$T	
     else
     	cp $1 $2
     fi	
 }
+
 
 function check_dir (){
 	ls -d ${1}/${2}* >& /dev/null
@@ -105,10 +106,13 @@ do
 	
 	check_dir $DIR rs; q=$?
 	[ $q -eq 0 ] && mkdir $TARGET_DIR/resting_state_me >& /dev/null
-	#mv $TARGET_DIR/*restingstate*.nii $TARGET_DIR/resting_state 2>&1 | tee -a $LOG_FILE
-	[ $q -eq 0 ] && cp $DIR/WPC*/rs_*.* $TARGET_DIR/resting_state_me 2>&1 | tee -a $LOG_FILE 
+	[ $q -eq 0 ] && cp $DIR/WPC*/*nstruction_*.* $TARGET_DIR/resting_state_me 2>&1 | tee -a $LOG_FILE 
 	
-	
+	check_dir $DIR rs; q=$?
+	[ $q -eq 0 ] && mkdir $TARGET_DIR/resting_state_hr >& /dev/null
+	[ $q -eq 0 ] && cp $DIR/WPC*/rs_*.* $TARGET_DIR/resting_state_hr 2>&1 | tee -a $LOG_FILE 	
+
+
 	check_dir $DIR diff_35 ; q=$?
 	[ $q -eq 0 ] && mkdir $TARGET_DIR/diff_35 >& /dev/null
 	[ $q -eq 0 ] && mv $TARGET_DIR/*diff35* $TARGET_DIR/diff_35 2>&1 | tee -a $LOG_FILE
@@ -131,12 +135,13 @@ do
 	for SD in $TARGET_DIR/*
 	do
 		SF=$(basename $SD)
-		SUBJECT="diamond_$USERNAME"
-		FL=($SD/*.nii)
+		SUBJECT="encore_$USERNAME"
+		FL=(`ls -t $SD/*.nii 2> /dev/null`)
 		AP=1
 		if [ "${#FL[@]}" -eq 2 ]  && [[ ${FL[0]} == *"fieldmap"* ]]; then
-			mv ${FL[0]} $SD/${SUBJECT}_${SF}_mag.nii 2> /dev/null	
-			mv ${FL[1]} $SD/${SUBJECT}_${SF}_phase.nii 2> /dev/null
+			FL=(`ls -S $SD/*.nii 2> /dev/null`)
+			mv ${FL[0]} $SD/${SUBJECT}_${SF}_mag.nii 2> /dev/null
+			mv ${FL[1]} $SD/${SUBJECT}_${SF}_phase.nii 2> /dev/null	
 		elif [ "${#FL[@]}" -eq 2 ]  && [[ ${FL[0]} == *"diff"* ]]; then
 			AP=0
 			mkdir $SD/temp
