@@ -317,6 +317,7 @@ def preprocess2(config,name='preprocess2'):
 	# prepare fieldmap
 	prepare_field = pe.Node(interface=fsl.PrepareFieldmap(),name='prepare_fieldmap')
 	prepare_field.inputs.output_type = "NIFTI"
+	prepare_field.inputs.delta_TE = 2.46  #TODO: CHECK VALUE - similar for Encore??
 	preproc.connect(apply_mg2s,'out_file',prepare_field,'in_magnitude')
 	preproc.connect(apply_ph2s,'out_file',prepare_field,'in_phase')
 
@@ -337,7 +338,7 @@ def preprocess2(config,name='preprocess2'):
 	# apply transform to realigned 4d functional referenced to structural
 	apply_f2s = pe.Node(interface=fsl.ApplyXfm(),name='apply_func2struct')
 	apply_f2s.inputs.interp =  config.flirt_interp
-	apply_f2s.inputs.reference = config.OASIS_template	
+	apply_f2s.inputs.reference = config.OASIS_template #TODO check - better option here? sets 2mm resolution	
 	preproc.connect(flirt_m2s,'out_matrix_file',apply_f2s,'in_matrix_file')
 	preproc.connect(realign,'realigned_files',apply_f2s,'in_file')
 	
@@ -346,6 +347,11 @@ def preprocess2(config,name='preprocess2'):
 	fugue = pe.Node(interface=fsl.FUGUE(),name='fieldmap_FUGUE')
 	preproc.connect(apply_f2s,'out_file',fugue,'in_file')
 	preproc.connect(prepare_field,'out_fieldmap',fugue,'fmap_in_file')
+	#TODO mask from BET struct
+	#TODO asym_se_time
+	#TODO dwell_time = 0.79 ??? different for encore
+	#TODO dwell_to_asym_ratio
+
 	
 	# create dartel template
 	dartel_template = dartel.create_DARTEL_template()
@@ -355,14 +361,14 @@ def preprocess2(config,name='preprocess2'):
 
 	# now lets do normalization with DARTEL
 	norm_func =  pe.Node(interface=spm.DARTELNorm2MNI(modulate=True),name='norm_func')	
-	norm_func.inputs.fwhm = 6	
+	norm_func.inputs.fwhm = 6 #TODO Check value	
 	preproc.connect(dartel_template,'outputspec.template_file',norm_func,'template_file')
 	preproc.connect(dartel_template, 'outputspec.flow_fields', norm_func, 'flowfield_files')
 	preproc.connect(fugue,'unwarped_file',norm_func,'apply_to_files')
 
 	# now lets do normalization with DARTEL
 	norm_struct =  pe.Node(interface=spm.DARTELNorm2MNI(modulate=True),name='norm_struct')
-	norm_struct.inputs.fwhm = 6
+	norm_struct.inputs.fwhm = 6 #TODO Check value
 	preproc.connect(dartel_template,'outputspec.template_file',norm_struct,'template_file')
 	preproc.connect(dartel_template, 'outputspec.flow_fields', norm_struct, 'flowfield_files')
 	preproc.connect(bet_struct,'out_file',norm_struct,'apply_to_files')
@@ -374,6 +380,7 @@ def preprocess2(config,name='preprocess2'):
 	preproc.connect(norm_func,'normalized_files',despike,'in_file')
 	
 	# smooth image using SUSAN
+	# TODO calculate brightness threshold - mean image, bet mask, calculate mean image intensity, value * 0.75 (fslmath)
 	susan = pe.Node(interface=fsl.SUSAN(), name="smooth")
 	susan.inputs.brightness_threshold = config.susan_brightness_threshold 
 	susan.inputs.fwhm = config.susan_fwhm

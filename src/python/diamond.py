@@ -790,7 +790,7 @@ if __name__ == "__main__":
 	if check_sequence(opt_list,directory,"preprocess"):
 		log.info("\n\nPreprocess pipeline ...\n\n")
 		t = time.time()		
-		df = preprocess(directory,"dynamic_faces")
+		df = preprocess(directory,"resting_state")
 		df.run() #plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES}
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 		
