@@ -1,0 +1,124 @@
+#!/bin/bash 
+#@author Eugene Tseytlin (University of Pittsburgh)
+
+
+# do some parameter checking
+PROG=`basename $0` 
+
+if [ -z $2 ];
+then
+    echo "Usage: ${PROG} <dir1> [dir2] ... [dirN] <target dir>"
+    echo "Transfer diamond POST behaviour data to a unified directory structure"    
+	exit 1
+fi
+TARGET="${!#}"
+
+# copy/convert E-Prime text files
+function cp_conv() {
+	ENC=$(file -i $1 | grep -o 'utf-16.*')
+   	if [ -n "${ENC}" ]; then
+   		T=$(basename $1)
+		iconv -f $ENC -t utf-8 $1 > $2/$T	
+    else
+    	cp $1 $2
+    fi	
+}
+
+
+function check_dir (){
+	ls -d ${1}/${2}* >& /dev/null
+	if [ $? -ne 0 ] ; then
+		echo "  Warning: missing sequence directory $2"
+		return 1	
+	fi 
+	return 0
+}
+
+echo "processing ..."
+
+for DIR in $@
+do
+	# skip target
+	if [ $DIR == $TARGET ]; then
+		continue
+	fi 
+	# convert to absolute path
+	DIR=$(cd $DIR;pwd)
+	LOG_DIR=$DIR/logs
+	COHORT=$(basename $(dirname $DIR))
+	DIR_NAME=$(basename $DIR)
+	USERNAME=$(basename $DIR| awk -F '.' '{print $2}')
+	DATE=$(basename $DIR|awk -F '[_.]' '{print $2}')
+	TARGET_DIR="$TARGET/$COHORT/$DIR_NAME"
+	
+	# create output directory
+	if [ ! -e $TARGET_DIR ]; then
+		mkdir -p $TARGET_DIR >& /dev/null
+	else
+		rm $TARGET_DIR/*/*.* >& /dev/null
+	fi
+	
+	# create a log file
+	if [ ! -d $LOG_DIR ];
+	then
+	    mkdir $LOG_DIR
+	fi
+
+	# transfer.subject.N.log
+	# find empty log file
+	i=1
+	LOG_FILE="${LOG_DIR}/${PROG}.${USERNAME}.${i}.log" 
+	while [ -e $LOG_FILE ] 
+	do
+	   let "i=i+1"
+	   LOG_FILE="${LOG_DIR}/${PROG}.${USERNAME}.${i}.log" 
+	done
+
+	# write out a pretty header file
+	DT=`date`
+	echo "+------------------------------------------------------------" > $LOG_FILE 2>&1
+	echo "|  Script:      ${PROG} " >> $LOG_FILE 2>&1
+	echo "|  Description: validate, unpack, convert and copy fMRI data" >> $LOG_FILE 2>&1
+	echo "|  Start:       ${DT} " >> $LOG_FILE 2>&1
+	echo "|  Argument:    ${DIR} " >> $LOG_FILE 2>&1
+	echo "|  Subject:     ${USERNAME} " >> $LOG_FILE 2>&1
+	echo "|  Cohort: 	  ${COHORT} " >> $LOG_FILE 2>&1
+	echo "+------------------------------------------------------------" >> $LOG_FILE 2>&1
+	echo " " >> $LOG_FILE 2>&1
+	
+	
+	echo "  organizing files for $DIR_NAME .." 2>&1 | tee -a $LOG_FILE
+	mkdir $TARGET_DIR/anat >& /dev/null
+	
+	# copy Post directory content	
+	mkdir $TARGET_DIR/post
+	cp $DIR/BHV*/Post/emotion*  $TARGET_DIR/post 2>&1 | tee -a $LOG_FILE
+	cp $DIR/BHV*/Post/PostTaskFraming* $TARGET_DIR/post 2>&1 | tee -a $LOG_FILE
+	
+	
+	for EPRIME_FILE in `find $TARGET_DIR -name '*.edat*'`
+	do
+		EPRIME_FILE=${EPRIME_FILE%.*}.txt
+		# convert E-Prime files to UTF-8
+		# check if eprime is utf-16
+		file -i ${EPRIME_FILE} | grep -q utf-16
+		if [ $? -eq 0 ]
+		then
+			mv $EPRIME_FILE tmp.txt 
+			iconv -f utf-16 -t utf-8 tmp.txt > ${EPRIME_FILE}
+		fi
+	done
+	chmod -R a+rwx ${TARGET_DIR}/post
+
+	# create logs directory if not there
+	if [ ! -e ${TARGET_DIR}/logs ];
+	then
+		mkdir ${TARGET_DIR}/logs
+	fi
+	cp $LOG_FILE ${TARGET_DIR}/logs
+
+	echo " "
+done
+
+echo "success!"
+exit 0
