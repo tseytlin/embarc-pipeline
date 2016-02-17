@@ -48,8 +48,9 @@ def datasource(directory, sequence):
 	else:
 
 		# define templates for datasource
-		field_template = dict(func=sequence+"/*"+sequence+".img",struct="anat/*_anat.nii")
-		template_args  = dict(func=[[]],struct=[[]])                
+		field_template = dict(func=sequence+"/*"+sequence+".img",struct="anat/*_anat.nii", 
+				     fieldmap_mag="field_map/*_mag.nii",fieldmap_phase="field_map/*_phase.nii")
+		template_args  = dict(func=[[]],struct=[[]],fieldmap_mag=[[]], filedmap_phase=[[]])                
 
 
 		# add behavior file to task oriented design
@@ -60,7 +61,7 @@ def datasource(directory, sequence):
 	# specify input dataset just pass through parameters
 	datasource = pe.Node(interface=nio.DataGrabber(
 						 infields=['subject_id','sequence'], 
-						 outfields=['func', 'struct','behav']),
+						 outfields=['func', 'struct','behav','fieldmap_phase','fieldmap_mag']),
 	                     name = "datasource_"+sequence)
 	datasource.inputs.base_directory = os.path.abspath(directory)
 	datasource.inputs.template = '*'
@@ -607,7 +608,7 @@ def preprocess(directory,sequence):
 		
 	# get components
 	ds = datasource(directory,sequence)
-	pp = gold.preprocess(conf)
+	pp = gold.preprocess2(conf)
 	#pp.get_node("input").inputs.template = embarc.OASIS_template	
 	
 	# connect components into a pipeline
@@ -741,12 +742,17 @@ if __name__ == "__main__":
 
 	
 	if check_sequence(opt_list,directory,"dynamic_faces"):
-		log.info("\n\nDynamic_Faces 2 pipeline ...\n\n")
+		log.info("\n\nDynamic_Faces pipeline ...\n\n")
 		t = time.time()		
 		df = dynamic_faces(directory,"dynamic_faces")
 		df.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
-	
+	if check_sequence(opt_list,directory,"preprocess"):
+		log.info("\n\nPreprocess pipeline ...\n\n")
+		t = time.time()		
+		df = preprocess(directory,"dynamic_faces")
+		df.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
+		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 		
 	log.info("\n\npipeline complete\n\n")

@@ -253,13 +253,13 @@ output:
 	movement - realign movement parameters
 	struct - structural processed image
 """
-def preprocess2(config,name='preprocess'):
+def preprocess2(config,name='preprocess2'):
 	import nipype.interfaces.spm as spm          # spm
 	import nipype.interfaces.fsl as fsl          # fsl
 	import nipype.interfaces.utility as util     # utility
 	import nipype.pipeline.engine as pe          # pypeline engine
 	import nipype.interfaces.afni as afni	     # afni
-	
+	import workflows.fmri.spm.preprocess as preproc # preprocess
 	fsl.FSLCommand.set_default_output_type('NIFTI')
 	
 	
@@ -302,16 +302,16 @@ def preprocess2(config,name='preprocess'):
 	# apply transform to magnitute to structural
 	apply_mg2s = pe.Node(interface=fsl.ApplyXfm(),name='apply_mag2struct')
 	apply_mg2s.inputs.interp =  config.flirt_interp
-	#apply_mg2s.inputs.reference = config.OASIS_template	
+	apply_mg2s.inputs.reference = config.OASIS_template	
 	preproc.connect(flirt_mg2s,'out_matrix_file',apply_mg2s,'in_matrix_file')
 	preproc.connect(inputnode,'fieldmap_mag',apply_mg2s,'in_file')
 
-	# apply transform to phaseto structural
+	# apply transform to phase to structural
 	apply_ph2s = pe.Node(interface=fsl.ApplyXfm(),name='apply_phase2struct')
 	apply_ph2s.inputs.interp =  config.flirt_interp
-	#apply_ph2s.inputs.reference = config.OASIS_template	
+	apply_ph2s.inputs.reference = config.OASIS_template	
 	preproc.connect(flirt_mg2s,'out_matrix_file',apply_f2s,'in_matrix_file')
-	preproc.connect(inputnode,'fieldmap_mag',apply_f2s,'in_file')
+	preproc.connect(inputnode,'fieldmap_phase',apply_f2s,'in_file')
 
 	# prepare fieldmap
 	prepare_field = pe.Node(interface=fsl.PrepareFieldmap(),name='prepare_fieldmap')
@@ -336,25 +336,33 @@ def preprocess2(config,name='preprocess'):
 	# apply transform to realigned 4d functional referenced to structural
 	apply_f2s = pe.Node(interface=fsl.ApplyXfm(),name='apply_func2struct')
 	apply_f2s.inputs.interp =  config.flirt_interp
-	#apply_f2s.inputs.reference = config.OASIS_template	
+	apply_f2s.inputs.reference = config.OASIS_template	
 	preproc.connect(flirt_m2s,'out_matrix_file',apply_f2s,'in_matrix_file')
 	preproc.connect(realign,'realigned_files',apply_f2s,'in_file')
 	
-	# what about segment
-
+	
 	# FSL FUGUE
 	fugue = pe.Node(interface=fsl.FUGUE(),name='fieldmap_FUGUE')
 	preproc.connect(apply_f2s,'out_file',fugue,'in_file')
 	preproc.connect(prepare_field,'out_fieldmap',fugue,'fmap_in_file')
 	
+	# create dartel template
+	dartel_template = preproc.create_DARTEL_template()
+	dartel_template.inputs.inputspec.template_prefix = 'Template'
+	dartel_template.inputs.inputspec.fwhm
+	preproc.connect(inputnode, 'structural_files',dartel_template,'inputspec.structural_files')
+
+
 	# now lets do normalization with DARTEL
-	norm_func =  pe.Node(interface=spm.DARTELNorm2MNI(),name='norm_func')
-	norm_func.template_file = config.OASIS_template 	
+	norm_func =  pe.Node(interface=spm.DARTELNorm2MNI(modulate=True),name='norm_func')	
+	proproc.connect(dartel_template,'outputspec.template_file',norm_func,'template_file')
+	preproc.connect(dartel_template, 'outputspec.flow_fields', norm2mni, 'flowfield_files')
 	preproc.connect(fuge,'out_file',norm_func,'apply_to_files')
 
 	# now lets do normalization with DARTEL
 	norm_struct =  pe.Node(interface=spm.DARTELNorm2MNI(),name='norm_struct')
-	norm_struct.template_file = config.OASIS_template 	
+	proproc.connect(dartel_template,'outputspec.template_file',norm_func,'template_file')
+	preproc.connect(dartel_template, 'outputspec.flow_fields', norm2mni, 'flowfield_files')
 	preproc.connect(bet_struct,'out_file',norm_func,'apply_to_files')
 
 	
