@@ -5,6 +5,9 @@ INPUT_PREFIX=$1
 OUTPUT_PREFIX=$2
 SUBJECT_LIST=$3
 
+ACQUISITION_PARAMS="${OUTPUT_PREFIX}/topup/acquisition_parameters.txt"
+B02B0_CONF="${OUTPUT_PREFIX}/topup/b02b0.cnf"
+
 
 if [ -z $SUBJECT_LIST ]; then
 	echo "Usage: $0 <input dataset prefix> <output dataset prefix> <subject list file>"
@@ -24,21 +27,40 @@ do
 	echo "processing $SUBJECT .."
 	
 	IDIR="${INPUT_PREFIX}/*${SUBJECT}/diff_210/"	
-	ODIR="${OUTPUT_PREFIX}/topup/${SUBJECT}"
+	
+	# predefine some directories	
+	TOPUP="${OUTPUT_PREFIX}/topup/"
+	sTOPUP="${TOPUP}/${SUBJECT}"
+	
+	EDDY="${OUTPUT_PREFIX}/eddy/"	
+
+	TRAC="${OUTPUT_PREFIX}/tracula/"
+	sTRAC="${sTRAC}/${SUBJECT}"
+	oTRAC="${sTRAC}/orig"
+
+	FS="${OUTPUT_PREFIX}/freesurfer/"
+	sFS="${FS}/${SUBJECT}"
+	oFS="${sFS}/mri/orig"
+
 	
 	# create output dir
-	mkdir -p $ODIR 2> /dev/null	
-
+	mkdir -p ${sTOPUP} 2> /dev/null	
+	mkdir -p ${sTOPUP}/AP 2> /dev/null	
+	mkdir -p ${sTOPUP}/PA 2> /dev/null	
+	
+	# copy PA/AP files to subfolders
+	cp ${IDIR}/*_AP.bval ${IDIR}/*_AP.bvec ${IDIR}/*_AP.nii ${sTOPUP}/AP
+	cp ${IDIR}/*_PA.bval ${IDIR}/*_PA.bvec ${IDIR}/*_PA.nii ${sTOPUP}/PA
 
 	# Paste PA and AP bvec and bval:
-	paste  -d ' ' ${IDIR}/*_PA.bval ${IDIR}/*_AP.bval > ${ODIR}/${SUBJECT}_420.bval
-	paste  -d ' ' ${IDIR}/*_PA.bvec ${IDIR}/*_AP.bvec > ${ODIR}/${SUBJECT}_420.bvec
+	paste  -d ' ' ${IDIR}/*_PA.bval ${IDIR}/*_AP.bval > ${sTOPUP}/${SUBJECT}_420.bval
+	paste  -d ' ' ${IDIR}/*_PA.bvec ${IDIR}/*_AP.bvec > ${sTOPUP}/${SUBJECT}_420.bvec
 
 	# Merge PA and AP bvec and bval:
-	fslmerge -t ${ODIR}/${SUJBECT}_420.nii ${IDIR}/*_PA.nii ${IDIR}/*_AP.nii
+	fslmerge -t ${sTOPUP}/${SUJBECT}_420.nii ${IDIR}/*_PA.nii ${IDIR}/*_AP.nii
 
 	# Split merged file for other operation
-	fslsplit ${ODIR}/${SUJBECT}_420.nii ${ODIR}/vol -t
+	fslsplit ${sTOPUP}/${SUJBECT}_420.nii ${sTOPUP}/vol -t
 
 	## Create index file for each subject:
 	# number progressively all the images that 'belong' to the same B0 image 
@@ -47,63 +69,61 @@ do
 	#1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 ... We have 13 images and 
 	#after merging the PA with the AP the maximum index number will be 26. 
 	#The index file will likely be the same for all the subjects. TO CHECK MANUALLY!!! 
-	rm $ODIR/index.txt 2> /dev/null
+	rm ${sTOPUP}/index.txt 2> /dev/null
 	
 	N=0
 	J=0
 	VOLS=""
-	for I in `cat ${ODIR}/${SUBJECT}_420.bval`
+	for I in `cat ${sTOPUP}/${SUBJECT}_420.bval`
 	do
 		if [ $I -eq 5 ];then
 			N=$(($N + 1))
 			V=$(printf "%04d\n" $J)
 			VOLS="$VOLS $V"	
 		fi
-		echo -n "$N " >> $ODIR/index.txt
+		echo -n "$N " >> ${sTOPUP}/index.txt
 		J=$(($J + 1))	
 	done
-	echo "" >> $ODIR/index.txt
+	echo "" >> ${sTOPUP}/index.txt
 
 	# Create a b0s_26.nii.gz file:
-	fslmerge -t ${ODIR}/b0s26.nii $VOLS
-	rm -r ${ODIR}/vol*
+	fslmerge -t ${sTOPUP}/b0s26.nii $VOLS
+	rm -r ${sTOPUP}/vol*
 
 	# Run topup (take time --- better in parallel analyses):
-	topup  --imain=${ODIR}/b0s26.nii --datain=${ODIR}/acquisition_parameters.txt --config=b02b0.cnf --out=${ODIR}/topup --iout=${ODIR}/unwarped_b0
+	topup  --imain=${sTOPUP}/b0s26.nii --datain=${ACQUISITION_PARAMS} --config=${B02B0_CONF} --out=${sTOPUP}/topup --iout=${sTOPUP}/unwarped_b0
 	# if image doesn't look great consider --warpres=4
 
 	# Run eddy #####eddy works in parallel and takes up a lot of CPU. Must run serial analyses:
-	EDDY="${OUTPUT_PREFIX}/eddy/"	
-	fslmaths ${ODIR}/unwarped_b0 -Tmean ${ODIR}/unwarped_b0 && bet ${ODIR}/unwarped_b0 ${ODIR}/unwarped_b0_brain -m 
-	slicesdir ${ODIR}/unwarped_b0_brain.nii 
-	eddy_openmp --imain=${ODIR}/${SUBJECT}_420.nii.gz --mask=${ODIR}/unwarped_b0_brain_mask --acqp=${ODIR}/acquisition_parameters.txt --index=${ODIR}/index.txt --bvecs=${ODIR}/${SUBJECT}_420.bvec --bvals=${ODIR}/${SUBJECT}_420.bval --topup=${ODIR}/topup --out=${EDDY}/${SUBJECT}.openmp --fep --verbose 
+	fslmaths ${sTOPUP}/unwarped_b0 -Tmean ${sTOPUP}/unwarped_b0 
+	bet ${sTOPUP}/unwarped_b0 ${sTOPUP}/unwarped_b0_brain -m 
+	slicesdir ${sTOPUP}/unwarped_b0_brain.nii 
+	eddy_openmp --imain=${sTOPUP}/${SUBJECT}_420.nii --mask=${sTOPUP}/unwarped_b0_brain_mask --acqp=${ACQUISITION_PARAMS} --index=${sTOPUP}/index.txt --bvecs=${sTOPUP}/${SUBJECT}_420.bvec --bvals=${sTOPUP}/${SUBJECT}_420.bval --topup=${sTOPUP}/topup --out=${EDDY}/${SUBJECT}.openmp --fep --verbose 
 
 	# get the first 210 volumes out of /data/dprojects/ENCORE/eddy/${SUBJECT}.nii.gz with fslroi
-	fslroi  ${EDDY}/${SUBJECT}.nii ${SUBJECT}.niis 0 210
+	fslroi  ${EDDY}/${SUBJECT}.nii ${SUBJECT}.nii 0 210
 
 	## get the 1st 210 bvecs out of /data/dprojects/ENCORE/eddy/${SUBJECT}_eddy_rotate_bvecs --> name it ${SUBJECT}.bvec 
 
 	# copy ${SUBJECT}.nii.gz and ${SUBJECT}.bvec in tracula folder: 
-	TDIR="${OUTPUT_PREFIX}/tracula/${SUBJECT}/orig"
-	mkdir -p $TDIR 2> /dev/null 
-	cp ${SUBJECT}.nii ${SUBJECT}.bvec $TDIR
-	cp ${ODIR}/PA/${SUBJECT}_210.bval ${DTDIR}/${SUBJECT}.bval
+	mkdir -p  ${oTRAC} 2> /dev/null 
+	cp ${SUBJECT}.nii ${SUBJECT}.bvec ${oTRAC}
+	cp ${sTOPUP}/PA/${SUBJECT}_210.bval ${oTRAC}/${SUBJECT}.bval
 
 	# make sure that freesurfer was done. Must have /'prefix'/freesurfer/${SUBJECT}/mri/apacr+aseg.mgz
 	# if not, run freesurfer:
-	FDIR="${OUTPUT_PREFIX}/freesurfer/${SUBJECT}/mri/orig"
-	mkdir -p $FDIR
-	mri_convert <1st dicom of mprage> ${FDIR}/001.mgz
-	cd ${OUTPUT_PREFIX}/freesurfer
+	mkdir -p ${oFS}
+	mri_convert <1st dicom of mprage> ${oFS}/001.mgz
+	cd ${FS}
 	recon-all -s ${SUBJECT} -all
 
 	# check now if /'prefix'/freesurfer/${SUBJECT}/mri/apacr+aseg.mgz exists now
 
 
 	# make script
-	cat ${OUTPUT_PREFIX}/tracula/scripts/dmrirc.template | sed "s/template/${SUBJECT}/g" > ${OUTPUT_PREFIX}/tracula/scripts/dmrirc.${SUBJECT}
+	cat ${TRAC}/scripts/dmrirc.template | sed "s/template/${SUBJECT}/g" > ${TRAC}/scripts/dmrirc.${SUBJECT}
 	# run tracula
-	cd ${OUTPUT_PREFIX}/tracula
+	cd ${TRAC}
 	trac-all -c scripts/dmrirc.${SUBJECT} -prep -noqa
 	trac-all -c scripts/dmrirc.${SUBJECT} -bedp
 	trac-all -c scripts/dmrirc.${SUBJECT} -path

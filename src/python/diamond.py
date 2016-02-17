@@ -331,7 +331,7 @@ def efnback(directory,sequence):
 	task.connect([(pp1,cc1,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
 	task.connect([(pp1,cc2,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
 	task.connect(cc1,"regressors",merge_move,"in1")	
-	task.connect(cc2,"regressors",merge_move,"inp2")	
+	task.connect(cc2,"regressors",merge_move,"in2")	
 
 	task.connect(ds1,'behav',dm1,"eprime_file")	
 	task.connect(ds2,'behav',dm2,"eprime_file")	
@@ -665,7 +665,7 @@ def preprocess(directory,sequence):
 # check sequence
 def check_sequence(opt_list,directory,seq):
 	seq_dir = seq
-	if seq == "preprocess":
+	if seq == "preprocess" and "-"+seq in opt_list:
 		return True	
 
 	# check if directory exists
@@ -791,7 +791,7 @@ if __name__ == "__main__":
 		log.info("\n\nPreprocess pipeline ...\n\n")
 		t = time.time()		
 		df = preprocess(directory,"dynamic_faces")
-		df.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
+		df.run() #plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES}
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 		
 	log.info("\n\npipeline complete\n\n")
