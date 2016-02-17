@@ -121,13 +121,13 @@ def reward(directory,sequence):
 	ds1 = datasource(directory,sequence+"_1")
 	ds2 = datasource(directory,sequence+"_2")
 	
-	pp1 = gold.preprocess(conf)
-	pp2 = gold.preprocess(conf)
+	pp1 = gold.preprocess(conf,"preprocess_1")
+	pp2 = gold.preprocess(conf,"preprocess_2")
 		
 	l1 = gold.level1analysis(conf);
 	l1.inputs.input.contrasts = contrasts
 
-	l2 = level1analysis(1,"level1_pppi");
+	l2 = gold.level1analysis(conf,1,"level1_pppi");
 	l2.inputs.input.contrasts = contrasts
 
 	# create DesignMatrix
@@ -140,9 +140,9 @@ def reward(directory,sequence):
 	dm2.inputs.matlab_function = "reward_eprime2dm"
 
 	# setup merge points
-	merge_func = pe.Node(name="merge_func",interface=util.Merge())
-	merge_nDM = pe.Node(name="merge_nDM",interface=util.Merge())
-	merge_move = pe.Node(name="merge_movement",interface=util.Merge())
+	merge_func = pe.Node(name="merge_func",interface=util.Merge(2))
+	merge_nDM = pe.Node(name="merge_nDM",interface=util.Merge(2))
+	merge_move = pe.Node(name="merge_movement",interface=util.Merge(2))
 		
 		
 	# connect components into a pipeline
@@ -160,11 +160,11 @@ def reward(directory,sequence):
 	task.connect(dm2,'design_matrix',merge_nDM,'in2')
 
 	task.connect(merge_move,"out",l1,"input.movement")	
-	task.connect(mere_func,'out',l1,'input.func')
+	task.connect(merge_func,'out',l1,'input.func')
 	task.connect(merge_nDM,'out',l1,"input.design_matrix")
 	
 	task.connect(merge_move,"out",l2,"input.movement")	
-	task.connect(mere_func,'out',l2,'input.func')
+	task.connect(merge_func,'out',l2,'input.func')
 	task.connect(merge_nDM,'out',l2,"input.design_matrix")
 
 	# define datasink
@@ -181,7 +181,7 @@ def reward(directory,sequence):
 		pppi.inputs.voi_name = roi[0]
 		pppi.inputs.voi_file = roi[1]
 		pppi.inputs.subject = subject
-		task.connect(l,'output.spm_mat_file',pppi,'spm_mat_file')
+		task.connect(l1,'output.spm_mat_file',pppi,'spm_mat_file')
 		
 		contrast = pe.Node(interface = spm.EstimateContrast(), name="contrast"+roi[0])
 		contrast.inputs.contrasts = ppi_contrasts
@@ -193,9 +193,11 @@ def reward(directory,sequence):
 	
 
 	# print and save the output of the preprocess pipeline
-	gold.print_save_files(task,pp1.get_node('output'),datasink,("func1","movement1","struct1","mask1"))	
-	gold.print_save_files(task,pp2.get_node('output'),datasink,("func2","movement2","struct2","mask2"))	
-	gold.print_save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images","pppi_Reward_VS_con_images"))	
+	#gold.print_save_files(task,pp1.get_node('output'),datasink,("func1","movement1","struct1","mask1"))	
+	#gold.print_save_files(task,pp2.get_node('output'),datasink,("func2","movement2","struct2","mask2"))
+	gold.print_save_files(task,pp1.get_node('output'),datasink,("struct","mask"))	
+	gold.print_save_files(task,l1.get_node('input'),datasink,("func","movement"))	
+	gold.print_save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images"))#,"pppi_Reward_VS_con_images"
 
 
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
@@ -226,9 +228,11 @@ def efnback(directory,sequence):
 	# some hard-coded sequence specific components
 	contrasts = []	
 	contrasts.append(("0back fear-noface","T",
+			["zerofear*bf(1)","zeroblank*bf(1)"],[1,-1]))
+	"""	
+	contrasts.append(("0back fear-noface","T",
 			["Sn(1)zerofear*bf(1)","Sn(2)zerofear*bf(1)","Sn(1)zeroblank*bf(1)",
 			"Sn(2)zeroblank*bf(1)"],[.5, .5,-.5,-.5]))
-	"""	
 	contrasts.append(("0back fear-neutface","T",
 			["Sn(1)zerofear*bf(1)","Sn(2)zerofear*bf(1)","Sn(1)zeroneutral*bf(1)",
 	"Sn(2)zeroneutral*bf(1)"],[.5, .5,-.5,-.5]))
