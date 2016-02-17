@@ -259,13 +259,14 @@ def preprocess2(config,name='preprocess2'):
 	import nipype.interfaces.utility as util     # utility
 	import nipype.pipeline.engine as pe          # pypeline engine
 	import nipype.interfaces.afni as afni	     # afni
-	import workflows.fmri.spm.preprocess as preproc # preprocess
+	import nipype.workflows.fmri.spm.preprocess as dartel # preprocess
 	fsl.FSLCommand.set_default_output_type('NIFTI')
 	
 	
 	preproc = pe.Workflow(name=name)
 
-	inputnode = pe.Node(interface=util.IdentityInterface(fields=['func','struct']),name='input')
+	inputnode = pe.Node(interface=util.IdentityInterface(
+		fields=['func','struct','fieldmap_mag','fieldmap_phase']),name='input')
 
 	realign = pe.Node(interface=spm.Realign(), name="realign")
 	realign.inputs.register_to_mean = True
@@ -310,8 +311,8 @@ def preprocess2(config,name='preprocess2'):
 	apply_ph2s = pe.Node(interface=fsl.ApplyXfm(),name='apply_phase2struct')
 	apply_ph2s.inputs.interp =  config.flirt_interp
 	apply_ph2s.inputs.reference = config.OASIS_template	
-	preproc.connect(flirt_mg2s,'out_matrix_file',apply_f2s,'in_matrix_file')
-	preproc.connect(inputnode,'fieldmap_phase',apply_f2s,'in_file')
+	preproc.connect(flirt_mg2s,'out_matrix_file',apply_ph2s,'in_matrix_file')
+	preproc.connect(inputnode,'fieldmap_phase',apply_ph2s,'in_file')
 
 	# prepare fieldmap
 	prepare_field = pe.Node(interface=fsl.PrepareFieldmap(),name='prepare_fieldmap')
@@ -347,23 +348,24 @@ def preprocess2(config,name='preprocess2'):
 	preproc.connect(prepare_field,'out_fieldmap',fugue,'fmap_in_file')
 	
 	# create dartel template
-	dartel_template = preproc.create_DARTEL_template()
+	dartel_template = dartel.create_DARTEL_template()
 	dartel_template.inputs.inputspec.template_prefix = 'Template'
-	dartel_template.inputs.inputspec.fwhm
-	preproc.connect(inputnode, 'structural_files',dartel_template,'inputspec.structural_files')
+	preproc.connect(inputnode, 'struct',dartel_template,'inputspec.structural_files')
 
 
 	# now lets do normalization with DARTEL
 	norm_func =  pe.Node(interface=spm.DARTELNorm2MNI(modulate=True),name='norm_func')	
-	proproc.connect(dartel_template,'outputspec.template_file',norm_func,'template_file')
-	preproc.connect(dartel_template, 'outputspec.flow_fields', norm2mni, 'flowfield_files')
-	preproc.connect(fuge,'out_file',norm_func,'apply_to_files')
+	norm_func.inputs.fwhm = 6	
+	preproc.connect(dartel_template,'outputspec.template_file',norm_func,'template_file')
+	preproc.connect(dartel_template, 'outputspec.flow_fields', norm_func, 'flowfield_files')
+	preproc.connect(fugue,'unwarped_file',norm_func,'apply_to_files')
 
 	# now lets do normalization with DARTEL
-	norm_struct =  pe.Node(interface=spm.DARTELNorm2MNI(),name='norm_struct')
-	proproc.connect(dartel_template,'outputspec.template_file',norm_func,'template_file')
-	preproc.connect(dartel_template, 'outputspec.flow_fields', norm2mni, 'flowfield_files')
-	preproc.connect(bet_struct,'out_file',norm_func,'apply_to_files')
+	norm_struct =  pe.Node(interface=spm.DARTELNorm2MNI(modulate=True),name='norm_struct')
+	norm_struct.inputs.fwhm = 6
+	preproc.connect(dartel_template,'outputspec.template_file',norm_struct,'template_file')
+	preproc.connect(dartel_template, 'outputspec.flow_fields', norm_struct, 'flowfield_files')
+	preproc.connect(bet_struct,'out_file',norm_struct,'apply_to_files')
 
 	
 	# remove spikes

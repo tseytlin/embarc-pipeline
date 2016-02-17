@@ -143,7 +143,17 @@ def reward(directory,sequence):
 	merge_func = pe.Node(name="merge_func",interface=util.Merge(2))
 	merge_nDM = pe.Node(name="merge_nDM",interface=util.Merge(2))
 	merge_move = pe.Node(name="merge_movement",interface=util.Merge(2))
+	
+	# mCompCor
+	cc1 = pe.Node(interface=wrap.mCompCor(), name="mCompCor1")
+	cc1.inputs.white_mask = conf.ROI_white
+	# mCompCor
+	cc2 = pe.Node(interface=wrap.mCompCor(), name="mCompCor2")
+	cc2.inputs.white_mask = conf.ROI_white
+	
 		
+	
+	
 		
 	# connect components into a pipeline
 	task = pe.Workflow(name=sequence)
@@ -152,12 +162,20 @@ def reward(directory,sequence):
 	task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct')])])
 	task.connect(ds1,'behav',dm1,"eprime_file")	
 	task.connect(ds2,'behav',dm2,"eprime_file")	
+
+	task.connect([(pp1,cc1,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
+	task.connect([(pp1,cc2,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
+	task.connect(cc1,"regressors",merge_move,"in1")	
+	task.connect(cc2,"regressors",merge_move,"inp2")
+
+
 	task.connect(pp1,'output.func',merge_func,'in1')
 	task.connect(pp2,'output.func',merge_func,'in2')
-	task.connect(pp1,'output.movement',merge_move,'in1')
-	task.connect(pp2,'output.movement',merge_move,'in2')
+	#task.connect(pp1,'output.movement',merge_move,'in1')
+	#task.connect(pp2,'output.movement',merge_move,'in2')
 	task.connect(dm1,'design_matrix',merge_nDM,'in1')
 	task.connect(dm2,'design_matrix',merge_nDM,'in2')
+
 
 	task.connect(merge_move,"out",l1,"input.movement")	
 	task.connect(merge_func,'out',l1,'input.func')
@@ -295,19 +313,32 @@ def efnback(directory,sequence):
 	merge_func = pe.Node(name="merge_func",interface=util.Merge(2))
 	merge_nDM = pe.Node(name="merge_nDM",interface=util.Merge(2))
 	merge_move = pe.Node(name="merge_movement",interface=util.Merge(2))
-		
+	
+	# mCompCor
+	cc1 = pe.Node(interface=wrap.mCompCor(), name="mCompCor1")
+	cc1.inputs.white_mask = conf.ROI_white
+	# mCompCor
+	cc2 = pe.Node(interface=wrap.mCompCor(), name="mCompCor2")
+	cc2.inputs.white_mask = conf.ROI_white
+	
 		
 	# connect components into a pipeline
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
 	task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct')])])
 	task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct')])])
+
+	task.connect([(pp1,cc1,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
+	task.connect([(pp1,cc2,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
+	task.connect(cc1,"regressors",merge_move,"in1")	
+	task.connect(cc2,"regressors",merge_move,"inp2")	
+
 	task.connect(ds1,'behav',dm1,"eprime_file")	
 	task.connect(ds2,'behav',dm2,"eprime_file")	
 	task.connect(pp1,'output.func',merge_func,'in1')
 	task.connect(pp2,'output.func',merge_func,'in2')
-	task.connect(pp1,'output.movement',merge_move,'in1')
-	task.connect(pp2,'output.movement',merge_move,'in2')
+	#task.connect(pp1,'output.movement',merge_move,'in1')
+	#task.connect(pp2,'output.movement',merge_move,'in2')
 	task.connect(dm1,'design_matrix',merge_nDM,'in1')
 	task.connect(dm2,'design_matrix',merge_nDM,'in2')
 
@@ -618,7 +649,8 @@ def preprocess(directory,sequence):
 	# connect components into a pipeline
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
-	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
+	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct'),
+	('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
 				
 	datasink = pe.Node(nio.DataSink(), name='datasink')
 	datasink.inputs.base_directory = out_dir
@@ -633,6 +665,9 @@ def preprocess(directory,sequence):
 # check sequence
 def check_sequence(opt_list,directory,seq):
 	seq_dir = seq
+	if seq == "preprocess":
+		return True	
+
 	# check if directory exists
 	if not (os.path.exists(directory+seq_dir) or os.path.exists(directory+seq_dir+"_1")):
 		print "Error: data directory for "+seq+" does not exists, skipping .."
@@ -663,7 +698,7 @@ def check_sequence(opt_list,directory,seq):
 
 # run pipeline if used as standalone script
 if __name__ == "__main__":	
-	opts = "[-dynamic_faces|-efnback|-reward|-resting_state]"
+	opts = "[-dynamic_faces|-efnback|-reward|-resting_state|-preprocess]"
 	opt_list = []
 	
 	# get arguments
@@ -685,7 +720,7 @@ if __name__ == "__main__":
 	directory = sys.argv[len(sys.argv)-1]
 	
 	# check directory
-	if not os.path.exists(directory):
+	if not os.path.exists(directory) and directory != "preprocess":
 		print "Error: data directory "+directory+" does not exist"
 		sys.exit(1)
 	
