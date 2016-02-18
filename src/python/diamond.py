@@ -644,6 +644,7 @@ def preprocess(directory,sequence):
 	# get components
 	ds = datasource(directory,sequence)
 	pp = gold.preprocess2(conf)
+	#pp = gold.preprocess2_no_fieldmap(conf)	
 	#pp.get_node("input").inputs.template = embarc.OASIS_template	
 	
 	# connect components into a pipeline
