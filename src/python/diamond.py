@@ -48,9 +48,9 @@ def datasource(directory, sequence):
 	else:
 
 		# define templates for datasource
-		field_template = dict(func=sequence+"/*"+sequence+".img",struct="anat/*_anat.nii", 
+		field_template = dict(func=sequence+"/*"+sequence+".img",struct="anat/*_anat_crop.nii", 
 				     fieldmap_mag="field_map/*_mag.nii",fieldmap_phase="field_map/*_phase.nii")
-		template_args  = dict(func=[[]],struct=[[]],fieldmap_mag=[[]], filedmap_phase=[[]])                
+		template_args  = dict(func=[[]],struct=[[]],fieldmap_mag=[[]], fieldmap_phase=[[]])                
 
 
 		# add behavior file to task oriented design

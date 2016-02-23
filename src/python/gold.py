@@ -22,7 +22,7 @@ class Config:
 		self.bet_robust = True
 		self.bet_vertical_gradient = 0
 		
-		self.flirt_cost = 'corratio'
+		self.flirt_cost = 'mutualinfo'
 		self.flirt_bins = 256
 		self.flirt_dof = 12
 		self.flirt_interp = 'trilinear'
@@ -45,7 +45,7 @@ class Config:
 		bin_dir = os.path.dirname(os.path.realpath(__file__))
 		data_dir = os.environ.get("SUPPORT_DATA_DIR",bin_dir+"/../data")
 
-		self.OASIS_template = data_dir+"/templates/OASIS-30_Atropos_template_in_MNI152_2mm.nii.gz"
+		self.OASIS_template = "/usr/local/software/matlab/spm8/tpm/grey.nii" #data_dir+"/templates/OASIS-30_Atropos_template_in_MNI152_2mm.nii.gz"
 		self.OASIS_labels = data_dir+"/templates/OASIS-TRT-20_jointfusion_DKT31_CMA_labels_in_MNI152_2mm.nii.gz"
 
 		ROI_dir = data_dir+"/OASIS_rois/"
@@ -288,64 +288,110 @@ def preprocess2(config,name='preprocess2'):
 	preproc.connect(inputnode,'struct',bet_struct,'in_file')	
 
 
+	# coregister images
+	coreg_func2struct = pe.Node(interface=spm.Coregister(),name="coreg_func2struct")
+	coreg_func2struct.inputs.jobtype = "estimate"
+ 	coreg_func2struct.inputs.cost_function = "nmi"
+	coreg_func2struct.inputs.separation = [4, 2]
+	coreg_func2struct.inputs.tolerance = [0.02, 0.02, 0.02, 0.001, 0.001, 0.001, 0.01, 0.01, 0.01, 0.001, 0.001, 0.001]
+	coreg_func2struct.inputs.fwhm = [7, 7]
+	preproc.connect(bet_struct,'out_file',coreg_func2struct,'target')
+	preproc.connect(realign,'realigned_files',coreg_func2struct,'apply_to_files')
+	preproc.connect(bet_mean,'out_file',coreg_func2struct,'source')
+
+
+	firstmag = pe.Node(interface=fsl.ExtractROI(),name="firstmag")
+	firstmag.inputs.x_min = 0	
+	firstmag.inputs.x_size = 96	
+	firstmag.inputs.y_min = 0	
+	firstmag.inputs.y_size = 96	
+	firstmag.inputs.z_min = 0	
+	firstmag.inputs.z_size = 54	
+	
+	firstmag.inputs.t_min = 0	
+	firstmag.inputs.t_size = 1	
+	preproc.connect(inputnode,'fieldmap_mag',firstmag,'in_file')
+
+	coreg_fm2struct = pe.Node(interface=spm.Coregister(),name="coreg_fieldmap2struct")
+	coreg_fm2struct.inputs.jobtype = "estimate"
+	coreg_fm2struct.inputs.cost_function = "nmi"
+	coreg_fm2struct.inputs.separation = [4, 2]
+	coreg_fm2struct.inputs.tolerance = [0.02, 0.02, 0.02, 0.001, 0.001, 0.001, 0.01, 0.01, 0.01, 0.001, 0.001, 0.001]
+	coreg_fm2struct.inputs.fwhm = [7, 7]
+	preproc.connect(bet_struct,'out_file',coreg_fm2struct,'target')
+	preproc.connect(firstmag,'roi_file',coreg_fm2struct,'source')
+	preproc.connect(inputnode,'fieldmap_phase',coreg_fm2struct,'apply_to_files')
+	
+
+	bet_mag = pe.Node(interface=fsl.BET(), name="bet_mag")
+	bet_mag.inputs.mask = config.bet_mask
+	bet_mag.inputs.frac = config.bet_frac
+	bet_mag.inputs.robust = config.bet_robust
+	bet_mag.inputs.vertical_gradient = config.bet_vertical_gradient
+	preproc.connect(coreg_fm2struct,'coregistered_source',bet_mag,'in_file')
+
 	# flirt_mag2struct coregister magnitute to structural 
-	flirt_mg2s = pe.Node(interface=fsl.FLIRT(), name='flirt_mag2struct')
-	flirt_mg2s.inputs.cost = config.flirt_cost
-	flirt_mg2s.inputs.bins = config.flirt_bins
-	flirt_mg2s.inputs.dof = config.flirt_dof
-	flirt_mg2s.inputs.interp = config.flirt_interp
-	flirt_mg2s.inputs.searchr_x = config.flirt_searchr_x
-	flirt_mg2s.inputs.searchr_y = config.flirt_searchr_y
-	flirt_mg2s.inputs.searchr_z = config.flirt_searchr_z
-	preproc.connect(bet_struct,'out_file',flirt_mg2s,'reference')
-	preproc.connect(inputnode,'fieldmap_mag',flirt_mg2s,'in_file')
+	#flirt_mg2s = pe.Node(interface=fsl.FLIRT(), name='flirt_mag2struct')
+	#flirt_mg2s.inputs.cost = config.flirt_cost
+	#flirt_mg2s.inputs.bins = config.flirt_bins
+	#flirt_mg2s.inputs.dof = config.flirt_dof
+	#flirt_mg2s.inputs.interp = config.flirt_interp
+	#flirt_mg2s.inputs.searchr_x = config.flirt_searchr_x
+	#flirt_mg2s.inputs.searchr_y = config.flirt_searchr_y
+	#flirt_mg2s.inputs.searchr_z = config.flirt_searchr_z
+	#preproc.connect(bet_struct,'out_file',flirt_mg2s,'reference')
+	#preproc.connect(inputnode,'fieldmap_mag',flirt_mg2s,'in_file')
 
 	# apply transform to magnitute to structural
-	apply_mg2s = pe.Node(interface=fsl.ApplyXfm(),name='apply_mag2struct')
-	apply_mg2s.inputs.interp =  config.flirt_interp
-	apply_mg2s.inputs.reference = config.OASIS_template	
-	preproc.connect(flirt_mg2s,'out_matrix_file',apply_mg2s,'in_matrix_file')
-	preproc.connect(inputnode,'fieldmap_mag',apply_mg2s,'in_file')
+	#apply_mg2s = pe.Node(interface=fsl.ApplyXfm(),name='apply_mag2struct')
+	#apply_mg2s.inputs.interp =  config.flirt_interp
+	#apply_mg2s.inputs.reference = config.OASIS_template #TODO: change to original file	
+	#preproc.connect(flirt_mg2s,'out_matrix_file',apply_mg2s,'in_matrix_file')
+	#preproc.connect(inputnode,'fieldmap_mag',apply_mg2s,'in_file')
+	#preproc.connect(realign,'mean_image' ,apply_mg2s,'reference') #check
 
+	
 	# apply transform to phase to structural
-	apply_ph2s = pe.Node(interface=fsl.ApplyXfm(),name='apply_phase2struct')
-	apply_ph2s.inputs.interp =  config.flirt_interp
-	apply_ph2s.inputs.reference = config.OASIS_template	
-	preproc.connect(flirt_mg2s,'out_matrix_file',apply_ph2s,'in_matrix_file')
-	preproc.connect(inputnode,'fieldmap_phase',apply_ph2s,'in_file')
-
+	#apply_ph2s = pe.Node(interface=fsl.ApplyXfm(),name='apply_phase2struct')
+	#apply_ph2s.inputs.interp =  config.flirt_interp
+	#apply_ph2s.inputs.reference = config.OASIS_template	#TODO: change to original file
+	#preproc.connect(flirt_mg2s,'out_matrix_file',apply_ph2s,'in_matrix_file')
+	#preproc.connect(inputnode,'fieldmap_phase',apply_ph2s,'in_file')
+	#preproc.connect(realign,'mean_image',apply_ph2s,'reference') #check
+	
 	# prepare fieldmap
 	prepare_field = pe.Node(interface=fsl.PrepareFieldmap(),name='prepare_fieldmap')
 	prepare_field.inputs.output_type = "NIFTI"
 	prepare_field.inputs.delta_TE = 2.46  #TODO: CHECK VALUE - similar for Encore??
-	preproc.connect(apply_mg2s,'out_file',prepare_field,'in_magnitude')
-	preproc.connect(apply_ph2s,'out_file',prepare_field,'in_phase')
+	preproc.connect(bet_mag,'out_file',prepare_field,'in_magnitude')
+	preproc.connect(coreg_fm2struct,'coregistered_files',prepare_field,'in_phase')
 
 	
 	# flirt_meam2struct structural to mean functional 
-	flirt_m2s = pe.Node(interface=fsl.FLIRT(), name='flirt_mean2struct')
-	flirt_m2s.inputs.cost = config.flirt_cost
-	flirt_m2s.inputs.bins = config.flirt_bins
-	flirt_m2s.inputs.dof = config.flirt_dof
-	flirt_m2s.inputs.interp = config.flirt_interp
-	flirt_m2s.inputs.searchr_x = config.flirt_searchr_x
-	flirt_m2s.inputs.searchr_y = config.flirt_searchr_y
-	flirt_m2s.inputs.searchr_z = config.flirt_searchr_z
-	preproc.connect(bet_struct,'out_file',flirt_m2s,'reference')
-	preproc.connect(bet_mean,'out_file',flirt_m2s,'in_file')
+	#flirt_m2s = pe.Node(interface=fsl.FLIRT(), name='flirt_mean2struct')
+	#flirt_m2s.inputs.cost = config.flirt_cost
+	#flirt_m2s.inputs.bins = config.flirt_bins
+	#flirt_m2s.inputs.dof = config.flirt_dof
+	#flirt_m2s.inputs.interp = config.flirt_interp
+	#flirt_m2s.inputs.searchr_x = config.flirt_searchr_x
+	#flirt_m2s.inputs.searchr_y = config.flirt_searchr_y
+	#flirt_m2s.inputs.searchr_z = config.flirt_searchr_z
+	#preproc.connect(bet_struct,'out_file',flirt_m2s,'reference')
+	#preproc.connect(bet_mean,'out_file',flirt_m2s,'in_file')
  
 	
 	# apply transform to realigned 4d functional referenced to structural
-	apply_f2s = pe.Node(interface=fsl.ApplyXfm(),name='apply_func2struct')
-	apply_f2s.inputs.interp =  config.flirt_interp
-	apply_f2s.inputs.reference = config.OASIS_template #TODO check - better option here? sets 2mm resolution	
-	preproc.connect(flirt_m2s,'out_matrix_file',apply_f2s,'in_matrix_file')
-	preproc.connect(realign,'realigned_files',apply_f2s,'in_file')
-	
+	#apply_f2s = pe.Node(interface=fsl.ApplyXfm(),name='apply_func2struct')
+	#apply_f2s.inputs.interp =  config.flirt_interp
+	#apply_f2s.inputs.reference = config.OASIS_template #TODO check - better option here? sets 2mm resolution	
+	#preproc.connect(flirt_m2s,'out_matrix_file',apply_f2s,'in_matrix_file')
+	#preproc.connect(realign,'realigned_files',apply_f2s,'in_file')
+	#preproc.connect(realign,'mean_image',apply_f2s,'reference')
 	
 	# FSL FUGUE
 	fugue = pe.Node(interface=fsl.FUGUE(),name='fieldmap_FUGUE')
-	preproc.connect(apply_f2s,'out_file',fugue,'in_file')
+	fugue.inputs.dwell_time = 0.00079
+	preproc.connect(coreg_func2struct,'coregistered_files',fugue,'in_file')
 	preproc.connect(prepare_field,'out_fieldmap',fugue,'fmap_in_file')
 	#TODO mask from BET struct
 	#TODO asym_se_time
