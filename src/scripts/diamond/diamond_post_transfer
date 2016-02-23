@@ -54,8 +54,6 @@ do
 	# create output directory
 	if [ ! -e $TARGET_DIR ]; then
 		mkdir -p $TARGET_DIR >& /dev/null
-	else
-		rm $TARGET_DIR/*/*.* >& /dev/null
 	fi
 	
 	# create a log file
