@@ -14,12 +14,12 @@ if [ -z $SUBJECT_LIST ]; then
 	exit 1;
 fi
 
-
+export FSLOUTPUTTYPE=NIFTI
 # go over every subect in the filelist
 for SUBJECT in $(cat $SUBJECT_LIST)
 do
 	# processing one subject at a time, assume that diff_210 was created
-	ls "${INPUT_PREFIX}/*${SUBJECT}/diff_210/*.nii" &> /dev/null
+	ls ${INPUT_PREFIX}/*${SUBJECT}/diff_210/*.nii &> /dev/null
 	if [ $? -ne 0 ]; then
 		echo "skipping $SUBJECT no diff_210 found in ${INPUT_PREFIX}/*${SUBJECT}"
 		continue
@@ -57,10 +57,10 @@ do
 	paste  -d ' ' ${IDIR}/*_PA.bvec ${IDIR}/*_AP.bvec > ${sTOPUP}/${SUBJECT}_420.bvec
 
 	# Merge PA and AP bvec and bval:
-	fslmerge -t ${sTOPUP}/${SUJBECT}_420.nii ${IDIR}/*_PA.nii ${IDIR}/*_AP.nii
+	fslmerge -t ${sTOPUP}/${SUBJECT}_420.nii ${IDIR}/*_PA.nii ${IDIR}/*_AP.nii
 
 	# Split merged file for other operation
-	fslsplit ${sTOPUP}/${SUJBECT}_420.nii ${sTOPUP}/vol -t
+	fslsplit ${sTOPUP}/${SUBJECT}_420.nii ${sTOPUP}/vol -t
 
 	## Create index file for each subject:
 	# number progressively all the images that 'belong' to the same B0 image 
@@ -78,8 +78,8 @@ do
 	do
 		if [ $I -eq 5 ];then
 			N=$(($N + 1))
-			V=$(printf "%04d\n" $J)
-			VOLS="$VOLS $V"	
+			V=$(printf "vol%04d.nii\n" $J)
+			VOLS="$VOLS ${sTOPUP}/$V"	
 		fi
 		echo -n "$N " >> ${sTOPUP}/index.txt
 		J=$(($J + 1))	

@@ -1,0 +1,62 @@
+# Paste PA and AP bvec and bval:
+	paste  ${i}/PA/${i}_210.bval ${i}/AP/${i}_210.bval | sed "/\t/ /g" > ${i}/${i}_420.bval
+	paste  ${i}/PA/${i}_210.bvec ${i}/AP/${i}_210.bvec | sed "/\t/ /g" > ${i}/${i}_420.bvec
+
+# Merge PA and AP bvec and bval:
+	fslmerge -t ${i}/${i}_420.nii ${i}/PA/${i}_210.nii ${i}/AP/${i}_210.nii
+
+## Create index file for each subject:
+# number progressively all the images that 'belong' to the same B0 image (in our case B5 image). Ex: 5 700 700 695 705 705 705 705 705 705 705 705 705 705 705 700 705 700 700 700 5 700 700 705 700 ... will become 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 ... We have 13 images and after merging the PA with the AP the maximum index number will be 26. The index file will likely be the same for all the subjects. TO CHECK MANUALLY!!!
+......
+
+
+# Create a b0s_26.nii.gz file:
+	cd ${i}
+	fslsplit ${i}_420.nii.gz vol -t
+	fslmerge -t b0s26.nii.gz vol0000.nii.gz vol0020.nii.gz vol0026.nii.gz vol0035.nii.gz vol0055.nii.gz vol0075.nii.gz vol0095.nii.gz vol0104.nii.gz vol0105.nii.gz vol0125.nii.gz vol0145.nii.gz vol0165.nii.gz vol0185.nii.gz vol0210.nii.gz vol0230.nii.gz vol0236.nii.gz vol0245.nii.gz vol0265.nii.gz vol0285.nii.gz vol0305.nii.gz vol0314.nii.gz vol0315.nii.gz vol0335.nii.gz vol0355.nii.gz vol0375.nii.gz vol0395.nii.gz
+	rm -r vol*; cd /data/dprojects/ENCORE/topup
+
+# Run topup (take time --- better in parallel analyses):
+	topup  --imain=${i}/b0s26.nii.gz --datain=${i}/acquisition_parameters.txt --config=b02b0.cnf --out=${i}/topup --iout=${i}/unwarped_b0
+# if image doesn't look great consider --warpres=4
+
+# Run eddy #####eddy works in parallel and takes up a lot of CPU. Must run serial analyses:
+	fslmaths ${i}/unwarped_b0 -Tmean ${i}/unwarped_b0 && bet ${i}/unwarped_b0 ${i}/unwarped_b0_brain -m 
+	slicesdir */unwarped_b0_brain.nii.gz 
+	eddy_openmp --imain=${i}/${i}_420.nii.gz --mask=${i}/unwarped_b0_brain_mask --acqp=${i}/acquisition_parameters.txt --index=${i}/index.txt --bvecs=${i}/${i}_420.bvec --bvals=${i}/${i}_420.bval --topup=${i}/topup --out=/data/dprojects/ENCORE/eddy/${i}.openmp --fep --verbose 
+
+# get the first 210 volumes out of /data/dprojects/ENCORE/eddy/${i}.nii.gz with fslroi
+	fslroi  /data/dprojects/ENCORE/eddy/${i}.nii.gz ${i}.nii.gz 0 210
+
+## get the 1st 210 bvecs out of /data/dprojects/ENCORE/eddy/${i}_eddy_rotate_bvecs --> name it ${i}.bvec 
+
+# copy ${i}.nii.gz and ${i}.bvec in tracula folder: 
+	mkdir -p /'prefix'/tracula/${i}/orig 
+	cp ${i}.nii.gz ${i}.bvec /'prefix'/tracula/${i}/orig/.
+	cp /'prefix'/topup/${i}/PA/${i}_210.bval /'prefix'/tracula/${i}/orig/${i}.bval
+
+# make sure that freesurfer was done. Must have /'prefix'/freesurfer/${i}/mri/apacr+aseg.mgz
+# if not, run freesurfer:
+	mkdir -p /'prefix'/freesurfer/${i}/mri/orig/bet 
+	mkdir -p /'prefix'/freesurfer/QA/orig
+	dcm2nii <1st dicom of mprage> /'prefix'/freesurfer/QA/orig/${i}_001.nii.gz
+	bet /'prefix'/freesurfer/QA/orig/${i}_001.nii.gz /'prefix'/freesurfer/QA/orig/${i}_001_brain.nii.gz -R -S -B -f 0.3
+	mri_convert /'prefix'/freesurfer/QA/orig/${i}_001_brain.nii.gz /'prefix'/freesurfer/${i}/mri/orig/001.mgz
+	cd /'prefix'/freesurfer
+	recon-all -s ${i} -all
+
+# check now if /'prefix'/freesurfer/${i}/mri/apacr+aseg.mgz exists now
+
+
+# make script
+	cat /'prefix'/tracula/scripts/dmrirc.template | sed "s/template/${i}/g" > /'prefix'/tracula/scripts/dmrirc.${i}
+# run tracula
+	cd /'prefix'/tracula
+	trac-all -c scripts/dmrirc.${i} -prep -noqa
+	trac-all -c scripts/dmrirc.${i} -bedp
+	trac-all -c scripts/dmrirc.${i} -path
+
+
+
+
+
