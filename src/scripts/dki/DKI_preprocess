@@ -42,7 +42,9 @@ do
 	sFS="${FS}/${SUBJECT}"
 	oFS="${sFS}/mri/orig"
 
-	
+	#TODO: where is supoose to come from?
+	FIRST_EMPRAGE_DICOM="<1st dicom of mprage>"
+
 	# create output dir
 	mkdir -p ${sTOPUP} 2> /dev/null	
 	mkdir -p ${sTOPUP}/AP 2> /dev/null	
@@ -112,9 +114,11 @@ do
 
 	# make sure that freesurfer was done. Must have /'prefix'/freesurfer/${SUBJECT}/mri/apacr+aseg.mgz
 	# if not, run freesurfer:
-	mkdir -p ${oFS}
-	mri_convert <1st dicom of mprage> ${oFS}/001.mgz
-	cd ${FS}
+	mkdir -p ${oFS}/bet
+	mkdir -p ${FS}/QA/orig
+	dcm2nii ${FIRST_EMPRAGE_DICOM} ${FS}/QA/orig/${SUBJECT}_001.nii
+	bet ${FS}/QA/orig/${SUBJECT}_001.nii ${FS}/QA/orig/${SUBJECT}_001_brain.nii -R -S -B -f 0.3
+	mri_convert ${FS}/QA/orig/${SUBJECT}_001_brain.nii ${oFS}/001.mgz
 	recon-all -s ${SUBJECT} -all
 
 	# check now if /'prefix'/freesurfer/${SUBJECT}/mri/apacr+aseg.mgz exists now

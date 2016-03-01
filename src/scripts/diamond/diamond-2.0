@@ -15,11 +15,32 @@ then
     echo "Run an DIAMOND 2.0 analysis pipeline on the set of subject data directories." 
 exit 1
 fi
+
+# some params
 FLAGS=""
+DATA_DIR_LIST=""
 
 
 # go over each dataset one at a time
-for DATA_DIR in $@
+for D in $@
+do
+
+	# skip some flags
+	if [ $D == "-dynamic_faces" -o $D == "-reward" -o $D == "-efnback" -o $D == "-resting_state" ];
+	then
+		FLAGS="${FLAGS} ${D}"
+	elif [ -d $D ];then
+		DATA_DIR_LIST="${DATA_DIR_LIST} ${D}"
+	elif [ -f $D ];then
+		DATA_DIR_LIST=$(cat $D)
+	fi
+done
+
+
+
+
+# go over each dataset one at a time
+for DATA_DIR in $DATA_DIR_LIST
 do
 
 	# skip some flags
