@@ -342,8 +342,8 @@ def preprocess2(config,name='preprocess2'):
 	coreg_fphase2struct.inputs.tolerance = config.coregister_tolerance
 	coreg_fphase2struct.inputs.fwhm = config.coregister_fwhm
 	preproc.connect(bet_struct,'out_file',coreg_fphase2struct,'target')
-	preproc.connect(firstmag,'roi_file',coreg_fphase2struct,'source')
-	preproc.connect(firstphase,'roi_file',coreg_fphase2struct,'apply_to_files')
+	preproc.connect(firstmag,'out_file',coreg_fphase2struct,'source')
+	preproc.connect(firstphase,'out_file',coreg_fphase2struct,'apply_to_files')
 	
 	# coregister magnitude image to structural
 	coreg_fmag2struct = pe.Node(interface=spm.Coregister(),name="coreg_fieldmapmag2struct")
@@ -353,7 +353,7 @@ def preprocess2(config,name='preprocess2'):
 	coreg_fmag2struct.inputs.tolerance = config.coregister_tolerance
 	coreg_fmag2struct.inputs.fwhm = config.coregister_fwhm
 	preproc.connect(bet_struct,'out_file',coreg_fmag2struct,'target')
-	preproc.connect(firstmag,'roi_file',coreg_fmag2struct,'source')
+	preproc.connect(firstmag,'out_file',coreg_fmag2struct,'source')
 	preproc.connect(inputnode,'fieldmap_mag',coreg_fmag2struct, 'apply_to_files')
 	
 	# skull strip magnitude image
