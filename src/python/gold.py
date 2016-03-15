@@ -377,7 +377,7 @@ def preprocess2(config,name='preprocess2'):
 	preproc.connect(prepare_field,'out_fieldmap',image_max,'in_file')
 
 	# invert image using fslmats
-	invert_image = pe.Node(interface=math.MathCommand(),name='invert_image')	
+	invert_image = pe.Node(interface=math.MathsCommand(),name='invert_image')	
 	preproc.connect(prepare_field,'out_fieldmap',invert_image,'in_file')
 	preproc.connect(image_max,('out_stat',create_inversion_args, "-mul -1 -add "),invert_image,'args')	
 
