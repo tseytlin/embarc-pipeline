@@ -409,7 +409,7 @@ def preprocess2(config,name='preprocess2'):
 
 	# now lets do normalization with DARTEL
 	norm_struct =  pe.Node(interface=spm.DARTELNorm2MNI(modulate=True),name='norm_struct')
-	norm_struct.inputs.fwhm = config.dartel_fwhmue
+	norm_struct.inputs.fwhm = config.dartel_fwhm
 	preproc.connect(dartel_template,'outputspec.template_file',norm_struct,'template_file')
 	preproc.connect(dartel_template, 'outputspec.flow_fields', norm_struct, 'flowfield_files')
 	preproc.connect(bet_struct,'out_file',norm_struct,'apply_to_files')
