@@ -5,9 +5,10 @@ INPUT_PREFIX=$1
 OUTPUT_PREFIX=$2
 SUBJECT_LIST=$3
 
-ACQUISITION_PARAMS="${OUTPUT_PREFIX}/topup/acquisition_parameters.txt"
-B02B0_CONF="${OUTPUT_PREFIX}/topup/b02b0.cnf"
-
+ACQUISITION_PARAMS="${OUTPUT_PREFIX}/acquisition_parameters.txt"
+B02B0_CONF="${OUTPUT_PREFIX}/b02b0.cnf"
+DMRIRC_TEMPLATE="${OUTPUT_PREFIX}/tracula/scripts/dmrirc.template"
+MODEL="1"
 
 if [ -z $SUBJECT_LIST ]; then
 	echo "Usage: $0 <input dataset prefix> <output dataset prefix> <subject list file>"
@@ -15,10 +16,13 @@ if [ -z $SUBJECT_LIST ]; then
 fi
 
 export FSLOUTPUTTYPE=NIFTI
+
+#TODO: create looging for everything
 # go over every subect in the filelist
 for SUBJECT in $(cat $SUBJECT_LIST)
 do
 	# processing one subject at a time, assume that diff_210 was created
+	#NOTE: make sure that AP and PA are there not just any nifti
 	ls ${INPUT_PREFIX}/*${SUBJECT}/diff_210/*.nii &> /dev/null
 	if [ $? -ne 0 ]; then
 		echo "skipping $SUBJECT no diff_210 found in ${INPUT_PREFIX}/*${SUBJECT}"
@@ -27,7 +31,8 @@ do
 	echo "processing $SUBJECT .."
 	
 	IDIR="${INPUT_PREFIX}/*${SUBJECT}/diff_210/"	
-	
+	ANAT="${INPUT_PREFIX}/*${SUBJECT}/anat/*_orient.nii"	
+
 	# predefine some directories	
 	TOPUP="${OUTPUT_PREFIX}/topup/"
 	sTOPUP="${TOPUP}/${SUBJECT}"
@@ -42,25 +47,27 @@ do
 	sFS="${FS}/${SUBJECT}"
 	oFS="${sFS}/mri/orig"
 
-	#TODO: where is supoose to come from?
-	FIRST_EMPRAGE_DICOM="<1st dicom of mprage>"
-
 	# create output dir
 	mkdir -p ${sTOPUP} 2> /dev/null	
 	mkdir -p ${sTOPUP}/AP 2> /dev/null	
-	mkdir -p ${sTOPUP}/PA 2> /dev/null	
+	mkdir -p ${sTOPUP}/PA 2> /dev/null
+	mkdir -p ${EDDY} 2> /dev/null	
 	
 	# copy PA/AP files to subfolders
+	echo "  copy AP and PA .nii data files .."	
 	cp ${IDIR}/*_AP.bval ${IDIR}/*_AP.bvec ${IDIR}/*_AP.nii ${sTOPUP}/AP
 	cp ${IDIR}/*_PA.bval ${IDIR}/*_PA.bvec ${IDIR}/*_PA.nii ${sTOPUP}/PA
 
 	# Paste PA and AP bvec and bval:
+	echo "  merge AP and PA .bvec and .bval files .."
 	paste  -d ' ' ${IDIR}/*_PA.bval ${IDIR}/*_AP.bval > ${sTOPUP}/${SUBJECT}_420.bval
 	paste  -d ' ' ${IDIR}/*_PA.bvec ${IDIR}/*_AP.bvec > ${sTOPUP}/${SUBJECT}_420.bvec
 
 	# Merge PA and AP bvec and bval:
+	echo "  merge AP and PA .nii data files .."	
 	fslmerge -t ${sTOPUP}/${SUBJECT}_420.nii ${IDIR}/*_PA.nii ${IDIR}/*_AP.nii
 
+	echo "  generating an index.txt file .."		
 	# Split merged file for other operation
 	fslsplit ${sTOPUP}/${SUBJECT}_420.nii ${sTOPUP}/vol -t
 
@@ -89,49 +96,66 @@ do
 	echo "" >> ${sTOPUP}/index.txt
 
 	# Create a b0s_26.nii.gz file:
+	echo "  creating a b0s26 .nii data file .."	
 	fslmerge -t ${sTOPUP}/b0s26.nii $VOLS
 	rm -r ${sTOPUP}/vol*
 
 	# Run topup (take time --- better in parallel analyses):
+	echo "  running topup script .."	
 	topup  --imain=${sTOPUP}/b0s26.nii --datain=${ACQUISITION_PARAMS} --config=${B02B0_CONF} --out=${sTOPUP}/topup --iout=${sTOPUP}/unwarped_b0
 	# if image doesn't look great consider --warpres=4
 
 	# Run eddy #####eddy works in parallel and takes up a lot of CPU. Must run serial analyses:
+	echo "  running eddy script .."	
 	fslmaths ${sTOPUP}/unwarped_b0 -Tmean ${sTOPUP}/unwarped_b0 
 	bet ${sTOPUP}/unwarped_b0 ${sTOPUP}/unwarped_b0_brain -m 
 	slicesdir ${sTOPUP}/unwarped_b0_brain.nii 
 	eddy_openmp --imain=${sTOPUP}/${SUBJECT}_420.nii --mask=${sTOPUP}/unwarped_b0_brain_mask --acqp=${ACQUISITION_PARAMS} --index=${sTOPUP}/index.txt --bvecs=${sTOPUP}/${SUBJECT}_420.bvec --bvals=${sTOPUP}/${SUBJECT}_420.bval --topup=${sTOPUP}/topup --out=${EDDY}/${SUBJECT}.openmp --fep --verbose 
 
 	# get the first 210 volumes out of /data/dprojects/ENCORE/eddy/${SUBJECT}.nii.gz with fslroi
+	echo "  extract first 210 volumes from EDDY .nii data file .."		
 	fslroi  ${EDDY}/${SUBJECT}.nii ${SUBJECT}.nii 0 210
 
 	## get the 1st 210 bvecs out of /data/dprojects/ENCORE/eddy/${SUBJECT}_eddy_rotate_bvecs --> name it ${SUBJECT}.bvec 
 
 	# copy ${SUBJECT}.nii.gz and ${SUBJECT}.bvec in tracula folder: 
+	echo "  copy data files to tracula folder .."
 	mkdir -p  ${oTRAC} 2> /dev/null 
 	cp ${SUBJECT}.nii ${SUBJECT}.bvec ${oTRAC}
 	cp ${sTOPUP}/PA/${SUBJECT}_210.bval ${oTRAC}/${SUBJECT}.bval
 
 	# make sure that freesurfer was done. Must have /'prefix'/freesurfer/${SUBJECT}/mri/apacr+aseg.mgz
 	# if not, run freesurfer:
+	echo "  create 001.mgz data file .."	
 	mkdir -p ${oFS}/bet
 	mkdir -p ${FS}/QA/orig
-	dcm2nii ${FIRST_EMPRAGE_DICOM} ${FS}/QA/orig/${SUBJECT}_001.nii
+	#dcm2nii ${FIRST_EMPRAGE_DICOM} ${FS}/QA/orig/${SUBJECT}_001.nii
+	cp ${ANAT} ${FS}/QA/orig/${SUBJECT}_001.nii
 	bet ${FS}/QA/orig/${SUBJECT}_001.nii ${FS}/QA/orig/${SUBJECT}_001_brain.nii -R -S -B -f 0.3
 	mri_convert ${FS}/QA/orig/${SUBJECT}_001_brain.nii ${oFS}/001.mgz
+	echo "  run recon-all script .."	
 	recon-all -s ${SUBJECT} -all
 
 	# check now if /'prefix'/freesurfer/${SUBJECT}/mri/apacr+aseg.mgz exists now
 
 
 	# make script
-	cat ${TRAC}/scripts/dmrirc.template | sed "s/template/${SUBJECT}/g" > ${TRAC}/scripts/dmrirc.${SUBJECT}
+	cat ${DMRIRC_TEMPLATE} | sed "s/template/${SUBJECT}/g" > ${TRAC}/scripts/dmrirc.${SUBJECT}
 	# run tracula
 	cd ${TRAC}
+	echo "  run trac-all prep script  .."
 	trac-all -c scripts/dmrirc.${SUBJECT} -prep -noqa
-	trac-all -c scripts/dmrirc.${SUBJECT} -bedp
+	if [ $MODEL == "1" ]; then
+		echo "  run trac-all model 1 script  .."
+		trac-all -c scripts/dmrirc.${SUBJECT} -bedp
+	elif [ $MODEL == "2" ]; then
+		echo "  run trac-all model 2 script  .."
+		bedpostx_mgh  ${sTRAC}/dmri  --nf=2  --fudge=1  --bi=1000  --model=2  --f0  --ardf0   --rician
+	fi
+	echo "  run trac-all path script  .."
 	trac-all -c scripts/dmrirc.${SUBJECT} -path
 
 done
 
+#TODO: add grep of skipped subjects in a log file at the end of the run.
 
