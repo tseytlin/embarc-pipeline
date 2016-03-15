@@ -34,9 +34,8 @@ class Config:
 		self.coregister_separation = [4, 2]
 		self.coregister_tolerance = [0.02, 0.02, 0.02, 0.001, 0.001, 0.001, 0.01, 0.01, 0.01, 0.001, 0.001, 0.001]
 		self.coregister_fwhm = [7, 7]
-	
-		self.prepare_field_scanner = "SIEMENS"
-		self.prepare_field_delta_TE = 2.46  #TODO: CHECK VALUE - similar for Encore??
+		self.prepare_fieldmap_scanner = "SIEMENS"
+		self.prepare_fieldmap_delta_TE = 2.46  #TODO: CHECK VALUE - similar for Encore??
 	
 		self.fugue_dwell_time = 0.000779983	
 		self.fugue_poly_order = 3
