@@ -1,0 +1,19 @@
+Hi Eugene
+
+Thanks - yes, I got the changes to work OK. Centrality doesn't work but at least it doesn't crash the system - I can come back to that. I made a couple of other things work too. I've attached the changed scripts here.
+
+Final key things to do:
+- nuisance: global signal (GS) correction for seed based, centrality, reho
+- nuisance: no global signal (NGS) correction for ALFF
+- intensity coding for susan
+- inversion for field map phase.
+
+Also as discussed - I found a couple of other places where TR is hard coded and I flagged them up.
+- check TR for compcor - not hard coded (consider checking against info in nifti header?)
+- check TR for nuisance - not hard coded
+It's a minor thing but it could potentially hold us up.
+
+Thanks
+Henry
+
+
