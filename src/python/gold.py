@@ -41,6 +41,7 @@ class Config:
 		self.fugue_poly_order = 3
 
 		self.dartel_fwhm = 6 #TODO Check value
+		self.dartel_voxel_size =  (2, 2, 2)
 		self.susan_brightness_threshold = 70 #200.0
 		self.susan_fwhm = 6
 		
@@ -56,8 +57,13 @@ class Config:
 		bin_dir = os.path.dirname(os.path.realpath(__file__))
 		data_dir = os.environ.get("SUPPORT_DATA_DIR",bin_dir+"/../data")
 
-		self.OASIS_template = "/usr/local/software/matlab/spm8/tpm/grey.nii" #data_dir+"/templates/OASIS-30_Atropos_template_in_MNI152_2mm.nii.gz"
-		self.OASIS_labels = data_dir+"/templates/OASIS-TRT-20_jointfusion_DKT31_CMA_labels_in_MNI152_2mm.nii.gz"
+		#self.OASIS_template = data_dir+"/templates/OASIS-30_Atropos_template_in_MNI152_2mm.nii.gz"
+		#self.OASIS_labels = data_dir+"/templates/OASIS-TRT-20_jointfusion_DKT31_CMA_labels_in_MNI152_2mm.nii.gz"
+		#TODO: replace with normal values		
+		self.OASIS_template = "/usr/local/software/matlab/spm8/tpm/grey.nii" 
+		self.OASIS_labels = "/data/gold-pype/data/templates/ROI_MNI_V4.nii"
+
+
 
 		ROI_dir = data_dir+"/OASIS_rois/"
 		ROI_suffix = "_oasis.nii"
@@ -98,7 +104,7 @@ class Config:
 		self.ROI_caudate_head_L = ROI_dir+"left_caudate"+ROI_suffix
 		self.ROI_caudate_head_R = ROI_dir+"right_caudate"+ROI_suffix
 		self.ROI_amygdala_LR = ROI_dir+"bilateral_amygdala"+ROI_suffix
-
+		self.ROI_leftVLPFC = "/data/gold-pype/data/OASIS_rois/leftVLPFC_2mm.nii"
 
 
 """
@@ -252,7 +258,9 @@ def preprocess(config,name='preprocess'):
 def create_inversion_args(stats,prefix):
 	return prefix+stats.split()[1]
 	
-
+def create_brightness_threshold(stats):
+	return float(stat)*.75
+	
 
 """
 EMBARC/DIAMOND 2.0 PreProcessing Pipeline
@@ -344,6 +352,18 @@ def preprocess2(config,name='preprocess2'):
 	preproc.connect(firstmag,'out_file',coreg_fphase2struct,'source')
 	preproc.connect(firstphase,'out_file',coreg_fphase2struct,'apply_to_files')
 	
+	# after coreg fphase, invert phase image and pipe into prepare_field
+	
+	# get maximum from image
+	image_max = pe.Node(interface=fsl.ImageStats(),name='image_max')	
+	image_max.inputs.op_string = "-R"
+	preproc.connect(coreg_fphase2struct,'coregistered_files',image_max,'in_file')
+
+	# invert image using fslmats
+	invert_image = pe.Node(interface=math.MathsCommand(),name='invert_image')	
+	preproc.connect(coreg_fphase2struct,'coregistered_files',invert_image,'in_file')
+	preproc.connect(image_max,('out_stat',create_inversion_args, "-mul -1 -add "),invert_image,'args')	
+
 	# coregister magnitude image to structural
 	coreg_fmag2struct = pe.Node(interface=spm.Coregister(),name="coreg_fieldmapmag2struct")
 	coreg_fmag2struct.inputs.jobtype = "estimate"
@@ -369,25 +389,15 @@ def preprocess2(config,name='preprocess2'):
 	prepare_field.inputs.scanner = config.prepare_fieldmap_scanner
 	prepare_field.inputs.delta_TE = config.prepare_fieldmap_delta_TE
 	preproc.connect(bet_mag,'out_file',prepare_field,'in_magnitude')
-	preproc.connect(coreg_fphase2struct,'coregistered_files',prepare_field,'in_phase')
+	preproc.connect(invert_image,'out_file',prepare_field,'in_phase')
 
-	# get maximum from image
-	image_max = pe.Node(interface=fsl.ImageStats(),name='image_max')	
-	image_max.inputs.op_string = "-R"
-	preproc.connect(prepare_field,'out_fieldmap',image_max,'in_file')
-
-	# invert image using fslmats
-	invert_image = pe.Node(interface=math.MathsCommand(),name='invert_image')	
-	preproc.connect(prepare_field,'out_fieldmap',invert_image,'in_file')
-	preproc.connect(image_max,('out_stat',create_inversion_args, "-mul -1 -add "),invert_image,'args')	
-
+	
 	# FSL FUGUE
 	fugue = pe.Node(interface=fsl.FUGUE(),name='fieldmap_FUGUE')
 	fugue.inputs.dwell_time = config.fugue_dwell_time
 	fugue.inputs.poly_order = config.fugue_poly_order
 	preproc.connect(coreg_func2struct,'coregistered_files',fugue,'in_file')
-	#preproc.connect(prepare_field,'out_fieldmap',fugue,'fmap_in_file')
-	preproc.connect(invert_image,'out_file',fugue,'fmap_in_file')
+	preproc.connect(prepare_field,'out_fieldmap',fugue,'fmap_in_file')
 	#TODO mask from BET struct
 	#TODO asym_se_time
 	#TODO dwell_time = 0.79 ??? different for encore
@@ -403,13 +413,14 @@ def preprocess2(config,name='preprocess2'):
 	# now lets do normalization with DARTEL
 	norm_func =  pe.Node(interface=spm.DARTELNorm2MNI(modulate=True),name='norm_func')	
 	norm_func.inputs.fwhm = config.dartel_fwhm
+	norm_func.inputs.voxel_size = config.dartel_voxel_size
 	preproc.connect(dartel_template,'outputspec.template_file',norm_func,'template_file')
 	preproc.connect(dartel_template, 'outputspec.flow_fields', norm_func, 'flowfield_files')
 	preproc.connect(fugue,'unwarped_file',norm_func,'apply_to_files')
 
 	# now lets do normalization with DARTEL
 	norm_struct =  pe.Node(interface=spm.DARTELNorm2MNI(modulate=True),name='norm_struct')
-	norm_struct.inputs.fwhm = config.dartel_fwhm
+	norm_struct.inputs.fwhm = config.dartel_fwhm  #TODO Check value
 	preproc.connect(dartel_template,'outputspec.template_file',norm_struct,'template_file')
 	preproc.connect(dartel_template, 'outputspec.flow_fields', norm_struct, 'flowfield_files')
 	preproc.connect(bet_struct,'out_file',norm_struct,'apply_to_files')
@@ -420,12 +431,17 @@ def preprocess2(config,name='preprocess2'):
 	despike.inputs.outputtype = 'NIFTI'
 	preproc.connect(norm_func,'normalized_files',despike,'in_file')
 	
+	# calculated brighness threshold for susan (mean image intensity * 0.75)
+	image_mean = pe.Node(interface=fsl.ImageStats(),name='image_mean')	
+	image_mean.inputs.op_string = "-m"
+	preproc.connect(bet_mean,'out_file',image_max,'in_file')
+
 	# smooth image using SUSAN
-	# TODO calculate brightness threshold - mean image, bet mask, calculate mean image intensity, value * 0.75 (fslmath)
 	susan = pe.Node(interface=fsl.SUSAN(), name="smooth")
-	susan.inputs.brightness_threshold = config.susan_brightness_threshold 
+	#susan.inputs.brightness_threshold = config.susan_brightness_threshold 
 	susan.inputs.fwhm = config.susan_fwhm
 	preproc.connect(despike,'out_file',susan,'in_file') 
+	preproc.connect(image_mean,('out_stat',create_brightness_threshold),susan,'brightness_threshold') 
 
 	# create a nice mask to output	
 	bet_func = pe.Node(interface=fsl.BET(), name="bet_func")

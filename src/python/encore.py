@@ -25,8 +25,8 @@ def datasource(directory, sequence):
 	subject=get_subject(directory)
 	
 	# define templates for datasource
-	field_template = dict(func=sequence+"/*"+sequence+".img",struct="anat/*_anat.nii")
-	template_args  = dict(func=[[]],struct=[[]])                
+	field_template = dict(func=sequence+"/*"+sequence+".img",struct="anat/*_anat_crop.nii", fieldmap_mag="field_map_hr/*_mag.nii",fieldmap_phase="field_map_hr/*_phase.nii")
+	template_args  = dict(func=[[]],struct=[[]],fieldmap_mag=[[]], fieldmap_phase=[[]])                
 
 
 	# add behavior file to task oriented design
@@ -37,8 +37,8 @@ def datasource(directory, sequence):
 	# specify input dataset just pass through parameters
 	datasource = pe.Node(interface=nio.DataGrabber(
 						 infields=['subject_id','sequence'], 
-						 outfields=['func', 'struct','behav']),
-	                     name = 'datasource')
+						 outfields=['func', 'struct','behav','fieldmap_phase','fieldmap_mag']),
+	                     name = 'datasource_'+sequence)
 	datasource.inputs.base_directory = os.path.abspath(directory)
 	datasource.inputs.template = '*'
 	datasource.inputs.field_template = field_template
@@ -96,28 +96,36 @@ def resting(directory,sequence):
 	# setup some constants
 	resting_roi_names = ['LeftInsula','RightInsula','LeftAmygdala',
 			     'RightAmygdala','LeftVS','RightVS','LeftBA9','RightBA9',
-			     'BR1','BR2','BR3','BR4','BR9']
+			     'BR1','BR2','BR3','BR4','BR9', 'leftVLPFC']
 	resting_roi_images = [conf.ROI_L_insula,conf.ROI_R_insula,conf.ROI_L_amyg,conf.ROI_R_amyg,
 			conf.ROI_VS_L,conf.ROI_VS_R,conf.ROI_BA9_L,conf.ROI_BA9_R,
-			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9]
+			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9, conf.ROI_leftVLPFC]
 	
 	ds = datasource(directory,sequence)
-	pp = gold.preprocess(conf)
+	pp = gold.preprocess2(conf)
 	
 	nu = pe.Node(interface=wrap.Nuisance(), name="nuisance")
 	nu.inputs.white_mask = conf.ROI_white
+	nu.inputs.time_repetition = conf.time_repetition
+
+	column_select = pe.Node(interface=wrap.ColumnSelect(),name="column_select")
+	column_select.inputs.selection = "6"
+	column_select.inputs.complement = True
 
 	glm = pe.Node(interface=fsl.GLM(), name="glm")
 	glm.inputs.out_res_name = "residual.4d.nii"
 	
+	glm_NGS = pe.Node(interface=fsl.GLM(), name="glm_NGS")
+	glm_NGS.inputs.out_res_name = "residual.4d.nii"
+
 	filt = pe.Node(interface=fsl.ImageMaths(), name="filter")
 	#filt.inputs.op_string = ' -bptf 128 12.5 '
-	filt.inputs.op_string = ' -bptf 37 4.167'
+	filt.inputs.op_string = ' -bptf 37 4.167'  #TODO hard coded filters, but dependent on TR
 	filt.inputs.terminal_output = 'none'
 	
 	alff = dict()
 	alff_nm = []
-	for hl in [[0.01,0.1],[0.01,0.027],[0.027,0.073]]:
+	for hl in [[0.01,0.1],[0.0,0.04],[0.04,0.08],[0.08,0.12],[0.12,0.16],[0.16,0.20],[0.20,0.24]]: #[[0.01,0.1],[0.01,0.027],[0.027,0.073]]: # add more frequencies
 		nm = "ALFF"+str(hl[1]).replace("0.","_")
 		alff_nm.append(nm)		
 		alff[nm] = CPAC.alff.create_alff(wf_name=nm.lower())
@@ -139,7 +147,7 @@ def resting(directory,sequence):
 	maskave = dict()
 	gunzip = dict()
 	
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]:
 		sca[mask] = CPAC.sca.create_sca(name_sca="sca_"+mask);
 		maskave[mask] = pe.Node(interface=afni.Maskave(),name="roi_ave_"+mask)
 		maskave[mask].inputs.outputtype = "NIFTI"
@@ -165,7 +173,8 @@ def resting(directory,sequence):
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
 	
-	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
+	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct'),
+	('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
 	task.connect([(pp,nu,[('output.ufunc','source'),
 						 ('output.mask','brain_mask'),
 						 ('output.movement','movement')])])
@@ -173,12 +182,17 @@ def resting(directory,sequence):
 	task.connect(pp,"output.func",glm,"in_file")
 	task.connect(glm,"out_res",filt,"in_file")
 	
+	task.connect(nu,"regressors",column_select,"in_file")
+	task.connect(column_select,"out_file",glm_NGS,"design")
+	task.connect(pp,"output.func",glm_NGS,"in_file")
+
 	task.connect(filt,"out_file",roiave,"in_file")
 	task.connect(roiave,"out_file",corroi,"in_files")
 		
 	
 	for nm in alff_nm:
-		task.connect(glm,'out_res',alff[nm],'inputspec.rest_res')
+		#task.connect(glm,'out_res',alff[nm],'inputspec.rest_res')
+		task.connect(glm_NGS,'out_res',alff[nm],'inputspec.rest_res')
 		task.connect(pp,'output.mask',alff[nm],'inputspec.rest_mask')	
 
 	task.connect(filt,"out_file",reho,"inputspec.rest_res_filt")
@@ -188,7 +202,7 @@ def resting(directory,sequence):
 	task.connect(nc,'outputspec.centrality_outputs',zscore,'inputspec.input_file')
 	task.connect(pp,'output.mask',zscore,'inputspec.mask_file')
 
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]: # add left vlpfc
 		task.connect(filt,"out_file",maskave[mask],"in_file")
 		task.connect(filt,"out_file",sca[mask],"inputspec.functional_file")
 		task.connect(maskave[mask],"out_file",sca[mask],"inputspec.timeseries_one_d")
@@ -226,7 +240,7 @@ def preprocess(directory,sequence):
 		
 	# get components
 	ds = datasource(directory,sequence)
-	pp = gold.preprocess(conf)
+	pp = gold.preprocess2(conf)
 	#pp.get_node("input").inputs.template = embarc.OASIS_template	
 	
 	# connect components into a pipeline

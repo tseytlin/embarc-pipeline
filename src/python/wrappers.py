@@ -375,6 +375,7 @@ class NuisanceInputSpec(BaseInterfaceInputSpec):
 	white_mask = InputMultiPath(File(exists=True),desc='White matter mask 3D nifti file',field="mask",mandatory=True)
 	movement = InputMultiPath(File(exists=True,copyfile=True),desc='Realigned Movement .txt file',field="movement",mandatory=True)
 	regressors = File(value='regressors.txt',desc='Output Regressors .txt  File',field='output',usedefault=True, genfile=True, hash_files=False)
+	time_repetition=traits.Float(1.5, field='TR', usedefault=True, desc='Time Repetition')
 
 class NuisanceOutputSpec(TraitedSpec):
 	regressors = File(exists=True, desc='Generated regressors .txt file')
@@ -401,10 +402,11 @@ class Nuisance(BaseInterface):
 		d['white']  = str(self.inputs.white_mask)
 		d['movement'] = str(self.inputs.movement)
 		d['regressors'] = "'"+str(self.inputs.regressors)+"'"
+		d['TR'] = str(self.inputs.time_repetition)
 		#d['directory'] = os.path.dirname(re.sub("[\[\]']","",d['source']))
 		myscript = Template("""
 		warning('off','all');
-		nuisance($source,$white,$brain,$movement,$regressors);
+		nuisance($source,$white,$brain,$movement,$regressors,$TR);
        	exit;
 		""").substitute(d)
 		mlab = MatlabCommand(script=myscript, mfile=True)
@@ -619,4 +621,21 @@ class CorrelateROIs(BaseInterface):
 		outputs['out_file'] = os.getcwd()+"/"+self.inputs.out_file
 		return outputs	
 
+##############################################################
+class ColumnSelectInputSpec(CommandLineInputSpec):
+	in_file = File(desc = "Input Delimited File", exists = True, mandatory = True, argstr="%s")
+	delimeter = traits.String(desc="Delimter", mandatory = False, default_value = "\t", position = 0, argstr="-d %s")
+	selection = traits.String(desc = "Select a set of columns",mandatory = True, position = 1, argstr="-f %s" )
+	complement = traits.Bool(desc = "Invert column selection", mandatory = False, position = 2,argstr="--complement")	
 
+class ColumnSelect(StdOutCommandLine):
+	input_spec = ColumnSelectInputSpec
+	cmd = 'cut'
+	
+	def _gen_outfilename(self):
+		return self.inputs.input_file + ".subset"
+
+	def _list_outputs(self):
+		outputs = self.output_spec().get()
+		outputs['out_file'] = os.path.abspath(self.inputs.in_file + ".subset")
+		return outputs
