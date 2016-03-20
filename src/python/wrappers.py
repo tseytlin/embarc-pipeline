@@ -8,7 +8,7 @@ import glob
 import scipy.io as sio
 
 from nipype.interfaces.matlab import MatlabCommand
-from nipype.interfaces.base import TraitedSpec, BaseInterface, BaseInterfaceInputSpec, File, traits, InputMultiPath
+from nipype.interfaces.base import TraitedSpec, BaseInterface, BaseInterfaceInputSpec, File, traits, InputMultiPath, StdOutCommandLine,StdOutCommandLineInputSpec
 from string import Template
 
 # Standard library imports
@@ -622,14 +622,17 @@ class CorrelateROIs(BaseInterface):
 		return outputs	
 
 ##############################################################
-class ColumnSelectInputSpec(CommandLineInputSpec):
+class ColumnSelectInputSpec(StdOutCommandLineInputSpec):
 	in_file = File(desc = "Input Delimited File", exists = True, mandatory = True, argstr="%s")
-	delimeter = traits.String(desc="Delimter", mandatory = False, default_value = "\t", position = 0, argstr="-d %s")
+	delimeter = traits.String(desc="Delimter", mandatory = False, position = 0, argstr="-d %s")
 	selection = traits.String(desc = "Select a set of columns",mandatory = True, position = 1, argstr="-f %s" )
 	complement = traits.Bool(desc = "Invert column selection", mandatory = False, position = 2,argstr="--complement")	
+class ColumnSelectOutputSpec(TraitedSpec):
+	out_file = File(exists=True, desc='Output Delimeted file')
 
 class ColumnSelect(StdOutCommandLine):
 	input_spec = ColumnSelectInputSpec
+	output_spec = ColumnSelectOutputSpec
 	cmd = 'cut'
 	
 	def _gen_outfilename(self):

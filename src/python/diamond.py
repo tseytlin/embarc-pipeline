@@ -563,7 +563,7 @@ def resting(directory,sequence):
 	maskave = dict()
 	gunzip = dict()
 	
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]:
 		sca[mask] = CPAC.sca.create_sca(name_sca="sca_"+mask);
 		maskave[mask] = pe.Node(interface=afni.Maskave(),name="roi_ave_"+mask)
 		maskave[mask].inputs.outputtype = "NIFTI"
@@ -623,7 +623,7 @@ def resting(directory,sequence):
 	task.connect(nc,'outputspec.centrality_outputs',zscore,'inputspec.input_file')
 	task.connect(pp,'output.mask',zscore,'inputspec.mask_file')
 
-	for mask in for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]:
 		task.connect(filt,"out_file",maskave[mask],"in_file")
 		task.connect(filt,"out_file",sca[mask],"inputspec.functional_file")
 		task.connect(maskave[mask],"out_file",sca[mask],"inputspec.timeseries_one_d")
@@ -790,7 +790,8 @@ if __name__ == "__main__":
 		log.info("\n\nRESTING pipeline ...\n\n")
 		t = time.time()		
 		resting = resting(directory,"resting_state")
-		resting.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
+		#resting.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
+		resting.run()
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	if check_sequence(opt_list,directory,"efnback"):

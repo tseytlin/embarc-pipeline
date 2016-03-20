@@ -434,7 +434,7 @@ def preprocess2(config,name='preprocess2'):
 	# calculated brighness threshold for susan (mean image intensity * 0.75)
 	image_mean = pe.Node(interface=fsl.ImageStats(),name='image_mean')	
 	image_mean.inputs.op_string = "-m"
-	preproc.connect(bet_mean,'out_file',image_max,'in_file')
+	preproc.connect(bet_mean,'out_file',image_mean,'in_file')
 
 	# smooth image using SUSAN
 	susan = pe.Node(interface=fsl.SUSAN(), name="smooth")
