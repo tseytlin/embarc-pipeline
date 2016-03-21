@@ -406,7 +406,7 @@ class Nuisance(BaseInterface):
 		#d['directory'] = os.path.dirname(re.sub("[\[\]']","",d['source']))
 		myscript = Template("""
 		warning('off','all');
-		nuisance($source,$white,$brain,$movement,$regressors,$TR);
+		nuisance($source,$white,$brain,$movement,$TR,$regressors);
        	exit;
 		""").substitute(d)
 		mlab = MatlabCommand(script=myscript, mfile=True)
@@ -636,7 +636,7 @@ class ColumnSelect(StdOutCommandLine):
 	cmd = 'cut'
 	
 	def _gen_outfilename(self):
-		return self.inputs.input_file + ".subset"
+		return self.inputs.in_file + ".subset"
 
 	def _list_outputs(self):
 		outputs = self.output_spec().get()

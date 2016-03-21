@@ -259,7 +259,7 @@ def create_inversion_args(stats,prefix):
 	return prefix+str(stats[1])
 	
 def create_brightness_threshold(stats):
-	return float(stat)*.75
+	return float(stats)*.75
 	
 
 """
