@@ -256,7 +256,7 @@ def preprocess(config,name='preprocess'):
 
 
 def create_inversion_args(stats,prefix):
-	return prefix+stats.split()[1]
+	return prefix+str(stats[1])
 	
 def create_brightness_threshold(stats):
 	return float(stat)*.75
@@ -336,10 +336,10 @@ def preprocess2(config,name='preprocess2'):
 	preproc.connect(inputnode,'fieldmap_mag',firstmag,'in_file')
 
 	# select first image of phase
-	firstphase = pe.Node(interface=Trim(),name="firstphase")
-	firstphase.inputs.begin_index = 0	
-	firstphase.inputs.end_index = 1
-	preproc.connect(inputnode,'fieldmap_phase',firstphase,'in_file')
+	#firstphase = pe.Node(interface=Trim(),name="firstphase")
+	#firstphase.inputs.begin_index = 0	
+	#firstphase.inputs.end_index = 1
+	#preproc.connect(inputnode,'fieldmap_phase',firstphase,'in_file')
 
 	# coregister phase image to structural
 	coreg_fphase2struct = pe.Node(interface=spm.Coregister(),name="coreg_fieldmapphase2struct")
@@ -350,8 +350,11 @@ def preprocess2(config,name='preprocess2'):
 	coreg_fphase2struct.inputs.fwhm = config.coregister_fwhm
 	preproc.connect(bet_struct,'out_file',coreg_fphase2struct,'target')
 	preproc.connect(firstmag,'out_file',coreg_fphase2struct,'source')
-	preproc.connect(firstphase,'out_file',coreg_fphase2struct,'apply_to_files')
+	preproc.connect(inputnode,'fieldmap_phase',coreg_fphase2struct,'apply_to_files')
+	#preproc.connect(firstphase,'out_file',coreg_fphase2struct,'apply_to_files')
 	
+
+
 	# after coreg fphase, invert phase image and pipe into prepare_field
 	
 	# get maximum from image
