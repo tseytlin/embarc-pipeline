@@ -109,7 +109,7 @@ def resting(directory,sequence):
 	nu.inputs.time_repetition = conf.time_repetition
 
 	column_select = pe.Node(interface=wrap.ColumnSelect(),name="column_select")
-	column_select.inputs.selection = "6"
+	column_select.inputs.selection = "18,24"
 	column_select.inputs.complement = True
 
 	glm = pe.Node(interface=fsl.GLM(), name="glm")
