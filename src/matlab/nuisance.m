@@ -4,7 +4,7 @@
 % output: confounds
 %
 %
-function out = nuisance(unsmoothed_nii_path,white_mask_roi_path,brain_mask_file_path,rp_movement_file_path,out)
+function out = nuisance(unsmoothed_nii_path,white_mask_roi_path,brain_mask_file_path,rp_movement_file_path,TR,out)
 
 	%dir = '/home/tseytlin/Work/embarc/python/TX/embarc_CU_TX0001_1R1_mri_fmriraw_20110912/';
 	%unsmoothed_nii_path = [dir '/dicom_bold_resting1/wuTX0001_1R1_bold_resting1.nii'];
@@ -17,8 +17,9 @@ function out = nuisance(unsmoothed_nii_path,white_mask_roi_path,brain_mask_file_
 	end
 	
 	% TR in seconds
-	TR=1.5;
-
+	if ~exist('TR')
+		TR=1.5;
+	end
 	% white matter ROI
 	mask_hdr = spm_vol(white_mask_roi_path);
 	mask_img = spm_read_vols(mask_hdr);

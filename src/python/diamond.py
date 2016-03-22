@@ -511,28 +511,37 @@ def resting(directory,sequence):
 	# setup some constants
 	resting_roi_names = ['LeftInsula','RightInsula','LeftAmygdala',
 			     'RightAmygdala','LeftVS','RightVS','LeftBA9','RightBA9',
-			     'BR1','BR2','BR3','BR4','BR9']
+			     'BR1','BR2','BR3','BR4','BR9', 'leftVLPFC']
 	resting_roi_images = [conf.ROI_L_insula,conf.ROI_R_insula,conf.ROI_L_amyg,conf.ROI_R_amyg,
 			conf.ROI_VS_L,conf.ROI_VS_R,conf.ROI_BA9_L,conf.ROI_BA9_R,
-			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9]
+			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9, conf.ROI_leftVLPFC]
 	
 	ds = datasource(directory,sequence)
-	pp = gold.preprocess(conf)
+	pp = gold.preprocess2(conf)
 	
 	nu = pe.Node(interface=wrap.Nuisance(), name="nuisance")
 	nu.inputs.white_mask = conf.ROI_white
+	nu.inputs.time_repetition = conf.time_repetition
+
+	column_select = pe.Node(interface=wrap.ColumnSelect(),name="column_select")
+	column_select.inputs.selection = "18,24"
+	column_select.inputs.complement = True
+
 
 	glm = pe.Node(interface=fsl.GLM(), name="glm")
 	glm.inputs.out_res_name = "residual.4d.nii"
 	
+	glm_NGS = pe.Node(interface=fsl.GLM(), name="glm_NGS")
+	glm_NGS.inputs.out_res_name = "residual.4d.nii"
+
 	filt = pe.Node(interface=fsl.ImageMaths(), name="filter")
 	#filt.inputs.op_string = ' -bptf 128 12.5 '
-	filt.inputs.op_string = ' -bptf 37 4.167'
+	filt.inputs.op_string = ' -bptf 37 4.167' #TODO hard coded filters, but dependent on TR
 	filt.inputs.terminal_output = 'none'
 	
 	alff = dict()
 	alff_nm = []
-	for hl in [[0.01,0.1],[0.01,0.027],[0.027,0.073]]:
+	for hl in [[0.01,0.1],[0.0,0.04],[0.04,0.08],[0.08,0.12],[0.12,0.16],[0.16,0.20],[0.20,0.24]]: 
 		nm = "ALFF"+str(hl[1]).replace("0.","_")
 		alff_nm.append(nm)		
 		alff[nm] = CPAC.alff.create_alff(wf_name=nm.lower())
@@ -549,12 +558,12 @@ def resting(directory,sequence):
 	nc.inputs.inputspec.threshold = 0.0744 
 	nc.inputs.inputspec.template = conf.OASIS_labels
 	zscore =  CPAC.network_centrality.get_zscore(wf_name='z_score')
-	
+
 	sca = dict()
 	maskave = dict()
 	gunzip = dict()
 	
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]:
 		sca[mask] = CPAC.sca.create_sca(name_sca="sca_"+mask);
 		maskave[mask] = pe.Node(interface=afni.Maskave(),name="roi_ave_"+mask)
 		maskave[mask].inputs.outputtype = "NIFTI"
@@ -580,20 +589,31 @@ def resting(directory,sequence):
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
 	
-	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
+	#task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
+	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct'),
+		('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
 	task.connect([(pp,nu,[('output.ufunc','source'),
-						 ('output.mask','brain_mask'),
-						 ('output.movement','movement')])])
+				 ('output.mask','brain_mask'),
+				 ('output.movement','movement')])])
+	
+
+
 	task.connect(nu,"regressors",glm,"design")
 	task.connect(pp,"output.func",glm,"in_file")
 	task.connect(glm,"out_res",filt,"in_file")
 	
+	task.connect(nu,"regressors",column_select,"in_file")
+	task.connect(column_select,"out_file",glm_NGS,"design")
+	task.connect(pp,"output.func",glm_NGS,"in_file")
+
+
 	task.connect(filt,"out_file",roiave,"in_file")
 	task.connect(roiave,"out_file",corroi,"in_files")
 		
 	
 	for nm in alff_nm:
-		task.connect(glm,'out_res',alff[nm],'inputspec.rest_res')
+		#task.connect(glm,'out_res',alff[nm],'inputspec.rest_res')
+		task.connect(glm_NGS,'out_res',alff[nm],'inputspec.rest_res')
 		task.connect(pp,'output.mask',alff[nm],'inputspec.rest_mask')	
 
 	task.connect(filt,"out_file",reho,"inputspec.rest_res_filt")
@@ -603,7 +623,7 @@ def resting(directory,sequence):
 	task.connect(nc,'outputspec.centrality_outputs',zscore,'inputspec.input_file')
 	task.connect(pp,'output.mask',zscore,'inputspec.mask_file')
 
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]:
 		task.connect(filt,"out_file",maskave[mask],"in_file")
 		task.connect(filt,"out_file",sca[mask],"inputspec.functional_file")
 		task.connect(maskave[mask],"out_file",sca[mask],"inputspec.timeseries_one_d")
@@ -770,7 +790,8 @@ if __name__ == "__main__":
 		log.info("\n\nRESTING pipeline ...\n\n")
 		t = time.time()		
 		resting = resting(directory,"resting_state")
-		resting.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
+		#resting.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
+		resting.run()
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	if check_sequence(opt_list,directory,"efnback"):
