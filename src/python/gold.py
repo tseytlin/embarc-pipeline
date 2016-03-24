@@ -480,23 +480,26 @@ output:
 def preprocess2_no_fieldmap(config,name='preprocess_no_fieldmap'):
 	import nipype.interfaces.spm as spm          # spm
 	import nipype.interfaces.fsl as fsl          # fsl
+	import nipype.interfaces.fsl.maths as math  
 	import nipype.interfaces.utility as util     # utility
 	import nipype.pipeline.engine as pe          # pypeline engine
 	import nipype.interfaces.afni as afni	     # afni
 	import nipype.workflows.fmri.spm.preprocess as dartel # preprocess
+	from nipype.interfaces.nipy.preprocess import Trim
+
 	fsl.FSLCommand.set_default_output_type('NIFTI')
 	
 	
 	preproc = pe.Workflow(name=name)
 
-	inputnode = pe.Node(interface=util.IdentityInterface(
-		fields=['func','struct']),name='input')
+	inputnode = pe.Node(interface=util.IdentityInterface(fields=['func','struct']),name='input')
 
+	# realign 4D functional
 	realign = pe.Node(interface=spm.Realign(), name="realign")
 	realign.inputs.register_to_mean = True
 	preproc.connect(inputnode,"func",realign,"in_files")
 
-
+	# skull strip mean functional image
 	bet_mean = pe.Node(interface=fsl.BET(), name="bet_mean")
 	bet_mean.inputs.mask = config.bet_mask
 	bet_mean.inputs.frac = config.bet_frac
@@ -504,6 +507,7 @@ def preprocess2_no_fieldmap(config,name='preprocess_no_fieldmap'):
 	bet_mean.inputs.vertical_gradient = config.bet_vertical_gradient
 	preproc.connect(realign,'mean_image',bet_mean,'in_file') 
 
+	# skull strip mean structural image
 	bet_struct = pe.Node(interface=fsl.BET(), name="bet_struct")
 	bet_struct.inputs.mask = config.bet_mask
 	bet_struct.inputs.frac = config.bet_frac
@@ -515,10 +519,10 @@ def preprocess2_no_fieldmap(config,name='preprocess_no_fieldmap'):
 	# coregister images
 	coreg_func2struct = pe.Node(interface=spm.Coregister(),name="coreg_func2struct")
 	coreg_func2struct.inputs.jobtype = "estimate"
- 	coreg_func2struct.inputs.cost_function = "nmi"
-	coreg_func2struct.inputs.separation = [4, 2]
-	coreg_func2struct.inputs.tolerance = [0.02, 0.02, 0.02, 0.001, 0.001, 0.001, 0.01, 0.01, 0.01, 0.001, 0.001, 0.001]
-	coreg_func2struct.inputs.fwhm = [7, 7]
+ 	coreg_func2struct.inputs.cost_function = config.coregister_cost_function
+	coreg_func2struct.inputs.separation = config.coregister_separation
+	coreg_func2struct.inputs.tolerance = config.coregister_tolerance
+	coreg_func2struct.inputs.fwhm = config.coregister_fwhm
 	preproc.connect(bet_struct,'out_file',coreg_func2struct,'target')
 	preproc.connect(realign,'realigned_files',coreg_func2struct,'apply_to_files')
 	preproc.connect(bet_mean,'out_file',coreg_func2struct,'source')
@@ -531,13 +535,15 @@ def preprocess2_no_fieldmap(config,name='preprocess_no_fieldmap'):
 
 	# now lets do normalization with DARTEL
 	norm_func =  pe.Node(interface=spm.DARTELNorm2MNI(modulate=True),name='norm_func')	
-	norm_func.inputs.fwhm = 6 #TODO Check value	
+	norm_func.inputs.fwhm = config.dartel_fwhm
+	norm_func.inputs.voxel_size = config.dartel_voxel_size
 	preproc.connect(dartel_template,'outputspec.template_file',norm_func,'template_file')
 	preproc.connect(dartel_template, 'outputspec.flow_fields', norm_func, 'flowfield_files')
-	
+	preproc.connect(coreg_func2struct,'coregistered_files',norm_func,'apply_to_files')
+
 	# now lets do normalization with DARTEL
 	norm_struct =  pe.Node(interface=spm.DARTELNorm2MNI(modulate=True),name='norm_struct')
-	norm_struct.inputs.fwhm = 6 #TODO Check value
+	norm_struct.inputs.fwhm = config.dartel_fwhm  #TODO Check value
 	preproc.connect(dartel_template,'outputspec.template_file',norm_struct,'template_file')
 	preproc.connect(dartel_template, 'outputspec.flow_fields', norm_struct, 'flowfield_files')
 	preproc.connect(bet_struct,'out_file',norm_struct,'apply_to_files')
@@ -548,12 +554,17 @@ def preprocess2_no_fieldmap(config,name='preprocess_no_fieldmap'):
 	despike.inputs.outputtype = 'NIFTI'
 	preproc.connect(norm_func,'normalized_files',despike,'in_file')
 	
+	# calculated brighness threshold for susan (mean image intensity * 0.75)
+	image_mean = pe.Node(interface=fsl.ImageStats(),name='image_mean')	
+	image_mean.inputs.op_string = "-m"
+	preproc.connect(bet_mean,'out_file',image_mean,'in_file')
+
 	# smooth image using SUSAN
-	# TODO calculate brightness threshold - mean image, bet mask, calculate mean image intensity, value * 0.75 (fslmath)
 	susan = pe.Node(interface=fsl.SUSAN(), name="smooth")
-	susan.inputs.brightness_threshold = config.susan_brightness_threshold 
+	#susan.inputs.brightness_threshold = config.susan_brightness_threshold 
 	susan.inputs.fwhm = config.susan_fwhm
 	preproc.connect(despike,'out_file',susan,'in_file') 
+	preproc.connect(image_mean,('out_stat',create_brightness_threshold),susan,'brightness_threshold') 
 
 	# create a nice mask to output	
 	bet_func = pe.Node(interface=fsl.BET(), name="bet_func")
@@ -570,6 +581,7 @@ def preprocess2_no_fieldmap(config,name='preprocess_no_fieldmap'):
 	preproc.connect(realign,'realignment_parameters',outputnode,'movement')
 	preproc.connect(norm_struct,'normalized_files',outputnode,'struct')
 	preproc.connect(bet_func,'mask_file',outputnode,'mask')
+	
 	
 	return preproc
 
