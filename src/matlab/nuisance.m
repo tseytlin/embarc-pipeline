@@ -94,7 +94,7 @@ function out = nuisance(unsmoothed_nii_path,white_mask_roi_path,brain_mask_file_
 
 	%truncate
 	store = store(:,1:n);
-	list = list(1:nn,:)
+	list = list(1:nn,:);
 
 	% create an array of timeseries in white matter
 	array = zeros(n, NumScans);
@@ -137,22 +137,27 @@ function out = nuisance(unsmoothed_nii_path,white_mask_roi_path,brain_mask_file_
 	end
 
 	% do principal component analysis (PCA)
-
+    
 	%%% better initialize?
 	third_array = [array' new_array'];
 	third_array = third_array';
 	[M, N] = size(third_array);
 	mn = mean(third_array, 2);
 	third_array = third_array - repmat(mn, 1, N);
-	ta = fft(third_array)/NumScans;
-	bp = repmat(BPF2, M, 1);
-	ta2 = bp.*ta;
-	third_array1 = real(ifft(ta2));
-
+	for nnn = 1:M
+	    ta = fft(third_array(nnn,:))/NumScans;
+	    %bp = repmat(BPF2, M, 1);
+	    ta2 = BPF2.*ta;
+	    third_array1(nnn,:) = real(ifft(ta2));
+    	end
 
 	Y = third_array1/(sqrt(N-1));
 	[u, S, PC] = svd(Y);
 
+	%     gs = fft(global_sig)/NumScans;
+	%     gs2 = BPF2.*gs;
+	%     global_sig1 = real(ifft(gs2));
+    
 	p_confounds = PC(:, 1:5);
 	p_confounds(:,6) = global_sig;
 
