@@ -11,7 +11,8 @@ import gold
 ## Predefined constants ##
 conf = gold.Config()
 
-
+# default value to use fieldmap in the pipeline
+useFieldmap=False
 
 """
 EMBARC 1.0 Input Data Source
@@ -25,8 +26,18 @@ def datasource(directory, sequence):
 	subject=get_subject(directory)
 	
 	# define templates for datasource
-	field_template = dict(func=sequence+"/*"+sequence+".img",struct="anat/*_anat_crop.nii", fieldmap_mag="field_map_hr/*_mag.nii",fieldmap_phase="field_map_hr/*_phase.nii")
-	template_args  = dict(func=[[]],struct=[[]],fieldmap_mag=[[]], fieldmap_phase=[[]])                
+	outfields=['func', 'struct']
+	field_template = dict(func=sequence+"/*"+sequence+".img",struct="anat/*_anat_crop.nii")
+	template_args  = dict(func=[[]],struct=[[]])                
+
+	if useFieldmap:
+		field_template['fieldmap_mag']   = "field_map_hr/*_mag.nii"
+		field_template['fieldmap_phase'] ="field_map_hr/*_phase.nii"
+		template_args['fieldmap_mag']  = [[]]
+		template_args['fieldmap_phase']  = [[]]
+		outfields.append('fieldmap_mag')
+		outfields.append('fieldmap_phase')
+			
 
 
 	# add behavior file to task oriented design
@@ -37,7 +48,7 @@ def datasource(directory, sequence):
 	# specify input dataset just pass through parameters
 	datasource = pe.Node(interface=nio.DataGrabber(
 						 infields=['subject_id','sequence'], 
-						 outfields=['func', 'struct','behav','fieldmap_phase','fieldmap_mag']),
+						 outfields=outfields),
 	                     name = 'datasource_'+sequence)
 	datasource.inputs.base_directory = os.path.abspath(directory)
 	datasource.inputs.template = '*'
@@ -102,7 +113,7 @@ def resting(directory,sequence):
 			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9, conf.ROI_leftVLPFC]
 	
 	ds = datasource(directory,sequence)
-	pp = gold.preprocess2(conf)
+	pp = gold.preprocess2(conf,useFieldmap)
 	
 	nu = pe.Node(interface=wrap.Nuisance(), name="nuisance")
 	nu.inputs.white_mask = conf.ROI_white
@@ -291,7 +302,7 @@ def check_sequence(opt_list,directory,seq):
 
 # run pipeline if used as standalone script
 if __name__ == "__main__":	
-	opts = "[-resting_state_hr]"
+	opts = "[-resting_state_hr|-fieldmap]"
 	opt_list = []
 	
 	# get arguments
@@ -347,6 +358,9 @@ if __name__ == "__main__":
 	mlab.MatlabCommand.set_default_terminal_output('stream')
 	#mlab.MatlabCommand.set_default_paths(bin_dir)
 	
+	if "-fieldmap" in opt_list:	
+		useFieldmap = True
+
 	
 	
 	if check_sequence(opt_list,directory,"resting_state_hr"):

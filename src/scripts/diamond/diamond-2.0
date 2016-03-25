@@ -11,7 +11,7 @@ PROG_FILE=`basename $0`
 if [ -z $1 ];
 then
     PROG=`basename $0` 
-    echo "Usage: ${PROG} [-dynamic_faces|-efnback_1|-efnback_2|-reward_1|-reward_2|-resting_state] <dir1> ...[dirN]"
+    echo "Usage: ${PROG} [-dynamic_faces|-efnback|-reward|-resting_state|-fieldmap] <dir1> ...[dirN]"
     echo "Run an DIAMOND 2.0 analysis pipeline on the set of subject data directories." 
 exit 1
 fi

@@ -10,6 +10,9 @@ import gold
 ## Predefined constants ##
 conf = gold.Config()
 
+# default value to use fieldmap in the pipeline
+useFieldmap=False
+
 
 
 """
@@ -28,6 +31,9 @@ def datasource(directory, sequence):
 	m = gl.glob(os.path.join(directory,"anat/T1MPRAGE*[0-9].nii"))
 	if len(m) > 0:
 		orig = True
+
+
+	outfields=['func', 'struct']
 
 	if orig:
 		# define templates for datasource
@@ -48,20 +54,30 @@ def datasource(directory, sequence):
 	else:
 
 		# define templates for datasource
-		field_template = dict(func=sequence+"/*"+sequence+".img",struct="anat/*_anat_crop.nii", 
-				     fieldmap_mag="field_map/*_mag.nii",fieldmap_phase="field_map/*_phase.nii")
-		template_args  = dict(func=[[]],struct=[[]],fieldmap_mag=[[]], fieldmap_phase=[[]])                
+		field_template = dict(func=sequence+"/*"+sequence+".img",struct="anat/*_anat_crop.nii")
+		template_args  = dict(func=[[]],struct=[[]])                
 
+		
 
 		# add behavior file to task oriented design
 		if sequence.startswith('reward') or sequence.startswith('efnback') or sequence.startswith('dynamic_faces'):
 			field_template['behav'] = sequence+"/*task.txt"
 			template_args['behav']  = [[]]
+			outfields.append('behav')
 
+		if useFieldmap:
+			field_template['fieldmap_mag']   = "field_map/*_mag.nii"
+			field_template['fieldmap_phase'] ="field_map/*_phase.nii"
+			template_args['fieldmap_mag']  = [[]]
+			template_args['fieldmap_phase']  = [[]]
+			outfields.append('fieldmap_mag')
+			outfields.append('fieldmap_phase')
+			
+	
 	# specify input dataset just pass through parameters
 	datasource = pe.Node(interface=nio.DataGrabber(
 						 infields=['subject_id','sequence'], 
-						 outfields=['func', 'struct','behav','fieldmap_phase','fieldmap_mag']),
+						 outfields=outfields),
 	                     name = "datasource_"+sequence)
 	datasource.inputs.base_directory = os.path.abspath(directory)
 	datasource.inputs.template = '*'
@@ -121,8 +137,8 @@ def reward(directory,sequence):
 	ds1 = datasource(directory,sequence+"_1")
 	ds2 = datasource(directory,sequence+"_2")
 	
-	pp1 = gold.preprocess(conf,"preprocess_1")
-	pp2 = gold.preprocess(conf,"preprocess_2")
+	pp1 = gold.preprocess2(conf,useFieldmap,"preprocess_1")
+	pp2 = gold.preprocess2(conf,useFieldmap,"preprocess_2")
 		
 	l1 = gold.level1analysis(conf);
 	l1.inputs.input.contrasts = contrasts
@@ -293,8 +309,8 @@ def efnback(directory,sequence):
 	ds1 = datasource(directory,sequence+"_1")
 	ds2 = datasource(directory,sequence+"_2")
 	
-	pp1 = gold.preprocess(conf,"preprocess_1")
-	pp2 = gold.preprocess(conf,"preprocess_2")
+	pp1 = gold.preprocess2(conf,useFieldmap,"preprocess_1")
+	pp2 = gold.preprocess2(conf,useFieldmap,"preprocess_2")
 	
 	
 	l1 = gold.level1analysis(conf);
@@ -403,7 +419,7 @@ def dynamic_faces(directory,sequence):
 
 	# get components
 	ds = datasource(directory,sequence)	
-	pp = gold.preprocess(conf)
+	pp = gold.preprocess2(conf,useFieldmap)
 	l1 = gold.level1analysis(conf);
 	l1.inputs.input.contrasts = contrasts
 	
@@ -517,7 +533,7 @@ def resting(directory,sequence):
 			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9, conf.ROI_leftVLPFC]
 	
 	ds = datasource(directory,sequence)
-	pp = gold.preprocess2(conf)
+	pp = gold.preprocess2(conf,useFieldmap)
 	
 	nu = pe.Node(interface=wrap.Nuisance(), name="nuisance")
 	nu.inputs.white_mask = conf.ROI_white
@@ -719,7 +735,7 @@ def check_sequence(opt_list,directory,seq):
 
 # run pipeline if used as standalone script
 if __name__ == "__main__":	
-	opts = "[-dynamic_faces|-efnback|-reward|-resting_state|-preprocess]"
+	opts = "[-dynamic_faces|-efnback|-reward|-resting_state|-fieldmap]"
 	opt_list = []
 	
 	# get arguments
@@ -775,7 +791,8 @@ if __name__ == "__main__":
 	mlab.MatlabCommand.set_default_terminal_output('stream')
 	#mlab.MatlabCommand.set_default_paths(bin_dir)
 	
-	
+	if "-fieldmap" in opt_list:	
+		useFieldmap = True
 
 	
 	if check_sequence(opt_list,directory,"reward"):
@@ -809,11 +826,6 @@ if __name__ == "__main__":
 		df.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
-	if check_sequence(opt_list,directory,"preprocess"):
-		log.info("\n\nPreprocess pipeline ...\n\n")
-		t = time.time()		
-		df = preprocess(directory,"resting_state")
-		df.run() #plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES}
-		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
+	
 		
 	log.info("\n\npipeline complete\n\n")
