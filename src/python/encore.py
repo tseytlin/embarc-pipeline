@@ -107,10 +107,10 @@ def resting(directory,sequence):
 	# setup some constants
 	resting_roi_names = ['LeftInsula','RightInsula','LeftAmygdala',
 			     'RightAmygdala','LeftVS','RightVS','LeftBA9','RightBA9',
-			     'BR1','BR2','BR3','BR4','BR9', 'leftVLPFC']
+			     'BR1','BR2','BR3','BR4','BR9'] #, 'leftVLPFC'
 	resting_roi_images = [conf.ROI_L_insula,conf.ROI_R_insula,conf.ROI_L_amyg,conf.ROI_R_amyg,
 			conf.ROI_VS_L,conf.ROI_VS_R,conf.ROI_BA9_L,conf.ROI_BA9_R,
-			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9, conf.ROI_leftVLPFC]
+			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9] #, conf.ROI_leftVLPFC
 	
 	ds = datasource(directory,sequence)
 	pp = gold.preprocess2(conf,useFieldmap)

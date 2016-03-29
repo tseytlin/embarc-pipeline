@@ -60,8 +60,8 @@ class Config:
 		#self.OASIS_template = data_dir+"/templates/OASIS-30_Atropos_template_in_MNI152_2mm.nii.gz"
 		#self.OASIS_labels = data_dir+"/templates/OASIS-TRT-20_jointfusion_DKT31_CMA_labels_in_MNI152_2mm.nii.gz"
 		#TODO: replace with normal values		
-		self.OASIS_template = "/usr/local/software/matlab/spm8/tpm/grey.nii" 
-		self.OASIS_labels = "/data/gold-pype/data/templates/ROI_MNI_V4.nii"
+		self.OASIS_template = "/usr/local/software/matlab/spm8/tpm/grey.nii.gz" 
+		self.OASIS_labels = "/data/gold-pype/data/templates/ROI_MNI_V4.nii.gz"
 
 
 
@@ -104,7 +104,7 @@ class Config:
 		self.ROI_caudate_head_L = ROI_dir+"left_caudate"+ROI_suffix
 		self.ROI_caudate_head_R = ROI_dir+"right_caudate"+ROI_suffix
 		self.ROI_amygdala_LR = ROI_dir+"bilateral_amygdala"+ROI_suffix
-		self.ROI_leftVLPFC = "/data/gold-pype/data/OASIS_rois/leftVLPFC_2mm.nii"
+		#self.ROI_leftVLPFC = "/data/gold-pype/data/OASIS_rois/leftVLPFC_2mm.nii"
 
 
 """
