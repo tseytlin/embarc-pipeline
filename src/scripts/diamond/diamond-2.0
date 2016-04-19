@@ -26,7 +26,7 @@ for D in $@
 do
 
 	# skip some flags
-	if [ $D == "-dynamic_faces" -o $D == "-reward" -o $D == "-efnback" -o $D == "-resting_state" ];
+	if [ $D == "-dynamic_faces" -o $D == "-reward" -o $D == "-efnback" -o $D == "-resting_state"  -o $D == "-fieldmap" ];
 	then
 		FLAGS="${FLAGS} ${D}"
 	elif [ -d $D ];then
@@ -42,13 +42,6 @@ done
 # go over each dataset one at a time
 for DATA_DIR in $DATA_DIR_LIST
 do
-
-	# skip some flags
-	if [ $DATA_DIR == "-dynamic_faces" -o $DATA_DIR == "-reward_1" -o $DATA_DIR == "-reward_2" -o $DATA_DIR == "-efnback_1" -o $DATA_DIR == "-efnback_2" -o $DATA_DIR == "-resting_state" ];
-	then
-		FLAGS="${FLAGS} ${DATA_DIR}"
-		continue
-	fi	
 	
 	# get some info
 	NAME=`basename $DATA_DIR`
