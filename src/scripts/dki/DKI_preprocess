@@ -5,10 +5,14 @@ INPUT_PREFIX=$1
 OUTPUT_PREFIX=$2
 SUBJECT_LIST=$3
 
-ACQUISITION_PARAMS="${OUTPUT_PREFIX}/acquisition_parameters.txt"
-B02B0_CONF="${OUTPUT_PREFIX}/b02b0.cnf"
-DMRIRC_TEMPLATE="${OUTPUT_PREFIX}/tracula/scripts/dmrirc.template"
+ACQUISITION_PARAMS="${OUTPUT_PREFIX}/conf/acquisition_parameters.txt"
+B02B0_CONF="${OUTPUT_PREFIX}/conf/b02b0.cnf"
+DMRIRC_TEMPLATE="${OUTPUT_PREFIX}/conf/dmrirc.template"
 MODEL="1"
+LOG_DIR="${OUTPUT_PREFIX}/logs"
+ULOG_FILE="${LOG_DIR}/${0}.log"
+
+mkdir -p ${LOG_DIR} 2> /dev/null
 
 if [ -z $SUBJECT_LIST ]; then
 	echo "Usage: $0 <input dataset prefix> <output dataset prefix> <subject list file>"
@@ -25,13 +29,14 @@ do
 	#NOTE: make sure that AP and PA are there not just any nifti
 	ls ${INPUT_PREFIX}/*${SUBJECT}/diff_210/*.nii &> /dev/null
 	if [ $? -ne 0 ]; then
-		echo "skipping $SUBJECT no diff_210 found in ${INPUT_PREFIX}/*${SUBJECT}"
+		echo "skipping $SUBJECT no diff_210 found in ${INPUT_PREFIX}/*${SUBJECT}" 2>&1 | tee -a $ULOG_FILE
 		continue
 	fi
-	echo "processing $SUBJECT .."
+	echo "processing $SUBJECT .."  2>&1 | tee -a $ULOG_FILE
 	
 	IDIR="${INPUT_PREFIX}/*${SUBJECT}/diff_210/"	
 	ANAT="${INPUT_PREFIX}/*${SUBJECT}/anat/*_orient.nii"	
+	
 
 	# predefine some directories	
 	TOPUP="${OUTPUT_PREFIX}/topup/"
@@ -42,118 +47,146 @@ do
 	TRAC="${OUTPUT_PREFIX}/tracula/"
 	sTRAC="${sTRAC}/${SUBJECT}"
 	oTRAC="${sTRAC}/orig"
+	scTRAC="${TRAC}/scripts/"
 
 	FS="${OUTPUT_PREFIX}/freesurfer/"
 	sFS="${FS}/${SUBJECT}"
 	oFS="${sFS}/mri/orig"
 
+	# set environment for FreeSurfer to work	
+	export SUBJECTS_DIR=${FS}
+
+
 	# create output dir
+	
 	mkdir -p ${sTOPUP} 2> /dev/null	
 	mkdir -p ${sTOPUP}/AP 2> /dev/null	
 	mkdir -p ${sTOPUP}/PA 2> /dev/null
 	mkdir -p ${EDDY} 2> /dev/null	
+	mkdir -p ${scTRAC}  2> /dev/null	
 	
-	# copy PA/AP files to subfolders
-	echo "  copy AP and PA .nii data files .."	
-	cp ${IDIR}/*_AP.bval ${IDIR}/*_AP.bvec ${IDIR}/*_AP.nii ${sTOPUP}/AP
-	cp ${IDIR}/*_PA.bval ${IDIR}/*_PA.bvec ${IDIR}/*_PA.nii ${sTOPUP}/PA
-
-	# Paste PA and AP bvec and bval:
-	echo "  merge AP and PA .bvec and .bval files .."
-	paste  -d ' ' ${IDIR}/*_PA.bval ${IDIR}/*_AP.bval > ${sTOPUP}/${SUBJECT}_420.bval
-	paste  -d ' ' ${IDIR}/*_PA.bvec ${IDIR}/*_AP.bvec > ${sTOPUP}/${SUBJECT}_420.bvec
-
-	# Merge PA and AP bvec and bval:
-	echo "  merge AP and PA .nii data files .."	
-	fslmerge -t ${sTOPUP}/${SUBJECT}_420.nii ${IDIR}/*_PA.nii ${IDIR}/*_AP.nii
-
-	echo "  generating an index.txt file .."		
-	# Split merged file for other operation
-	fslsplit ${sTOPUP}/${SUBJECT}_420.nii ${sTOPUP}/vol -t
-
-	## Create index file for each subject:
-	# number progressively all the images that 'belong' to the same B0 image 
-	#(in our case B5 image). Ex: 5 700 700 695 705 705 705 705 705 705 705 705 705 
-	#705 705 700 705 700 700 700 5 700 700 705 700 ... will become 
-	#1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 ... We have 13 images and 
-	#after merging the PA with the AP the maximum index number will be 26. 
-	#The index file will likely be the same for all the subjects. TO CHECK MANUALLY!!! 
-	rm ${sTOPUP}/index.txt 2> /dev/null
-	
-	N=0
-	J=0
-	VOLS=""
-	for I in `cat ${sTOPUP}/${SUBJECT}_420.bval`
+	# find empty log file
+	i=1
+	LOG_FILE="${LOG_DIR}/dki.${USERNAME}.${i}.log" 
+	while [ -e $LOG_FILE ] 
 	do
-		if [ $I -eq 5 ];then
-			N=$(($N + 1))
-			V=$(printf "vol%04d.nii\n" $J)
-			VOLS="$VOLS ${sTOPUP}/$V"	
-		fi
-		echo -n "$N " >> ${sTOPUP}/index.txt
-		J=$(($J + 1))	
+	   let "i=i+1"
+	   LOG_FILE="${LOG_DIR}/dki.${USERNAME}.${i}.log" 
 	done
-	echo "" >> ${sTOPUP}/index.txt
 
-	# Create a b0s_26.nii.gz file:
-	echo "  creating a b0s26 .nii data file .."	
-	fslmerge -t ${sTOPUP}/b0s26.nii $VOLS
-	rm -r ${sTOPUP}/vol*
 
-	# Run topup (take time --- better in parallel analyses):
-	echo "  running topup script .."	
-	topup  --imain=${sTOPUP}/b0s26.nii --datain=${ACQUISITION_PARAMS} --config=${B02B0_CONF} --out=${sTOPUP}/topup --iout=${sTOPUP}/unwarped_b0
-	# if image doesn't look great consider --warpres=4
+	# copy PA/AP files to subfolders
+	if [ ! -f ${sTOPUP}/${SUBJECT}_420.nii ]; then	
+		echo "  copy AP and PA .nii data files .."	2>&1 | tee -a $LOG_FILE
+		cp ${IDIR}/*_AP.bval ${IDIR}/*_AP.bvec ${IDIR}/*_AP.nii ${sTOPUP}/AP	2>&1 | tee -a $LOG_FILE
+		cp ${IDIR}/*_PA.bval ${IDIR}/*_PA.bvec ${IDIR}/*_PA.nii ${sTOPUP}/PA	2>&1 | tee -a $LOG_FILE
 
-	# Run eddy #####eddy works in parallel and takes up a lot of CPU. Must run serial analyses:
-	echo "  running eddy script .."	
-	fslmaths ${sTOPUP}/unwarped_b0 -Tmean ${sTOPUP}/unwarped_b0 
-	bet ${sTOPUP}/unwarped_b0 ${sTOPUP}/unwarped_b0_brain -m 
-	slicesdir ${sTOPUP}/unwarped_b0_brain.nii 
-	eddy_openmp --imain=${sTOPUP}/${SUBJECT}_420.nii --mask=${sTOPUP}/unwarped_b0_brain_mask --acqp=${ACQUISITION_PARAMS} --index=${sTOPUP}/index.txt --bvecs=${sTOPUP}/${SUBJECT}_420.bvec --bvals=${sTOPUP}/${SUBJECT}_420.bval --topup=${sTOPUP}/topup --out=${EDDY}/${SUBJECT}.openmp --fep --verbose 
+		# Paste PA and AP bvec and bval:
+		echo "  merge AP and PA .bvec and .bval files .."	2>&1 | tee -a $LOG_FILE
+		paste  -d ' ' ${IDIR}/*_PA.bval ${IDIR}/*_AP.bval > ${sTOPUP}/${SUBJECT}_420.bval	2>&1 | tee -a $LOG_FILE
+		paste  -d ' ' ${IDIR}/*_PA.bvec ${IDIR}/*_AP.bvec > ${sTOPUP}/${SUBJECT}_420.bvec	2>&1 | tee -a $LOG_FILE
 
-	# get the first 210 volumes out of /data/dprojects/ENCORE/eddy/${SUBJECT}.nii.gz with fslroi
-	echo "  extract first 210 volumes from EDDY .nii data file .."		
-	fslroi  ${EDDY}/${SUBJECT}.nii ${SUBJECT}.nii 0 210
+		# Merge PA and AP bvec and bval:
+		echo "  merge AP and PA .nii data files .."	2>&1 | tee -a $LOG_FILE
+		fslmerge -t ${sTOPUP}/${SUBJECT}_420.nii ${IDIR}/*_PA.nii ${IDIR}/*_AP.nii	2>&1 | tee -a $LOG_FILE
+	fi
+	
+	if [ ! -f ${sTOPUP}/b0s26.nii ]; then	
+		echo "  generating an index.txt file .." 2>&1 | tee -a $LOG_FILE
+		# Split merged file for other operation
+		fslsplit ${sTOPUP}/${SUBJECT}_420.nii ${sTOPUP}/vol -t	2>&1 | tee -a $LOG_FILE
 
-	## get the 1st 210 bvecs out of /data/dprojects/ENCORE/eddy/${SUBJECT}_eddy_rotate_bvecs --> name it ${SUBJECT}.bvec 
+		## Create index file for each subject:
+		# number progressively all the images that 'belong' to the same B0 image 
+		#(in our case B5 image). Ex: 5 700 700 695 705 705 705 705 705 705 705 705 705 
+		#705 705 700 705 700 700 700 5 700 700 705 700 ... will become 
+		#1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 ... We have 13 images and 
+		#after merging the PA with the AP the maximum index number will be 26. 
+		#The index file will likely be the same for all the subjects. TO CHECK MANUALLY!!! 
+		rm ${sTOPUP}/index.txt 2> /dev/null
+	
+		N=0
+		J=0
+		VOLS=""
+		for I in `cat ${sTOPUP}/${SUBJECT}_420.bval`
+		do
+			if [ $I -eq 5 ];then
+				N=$(($N + 1))
+				V=$(printf "vol%04d.nii\n" $J)
+				VOLS="$VOLS ${sTOPUP}/$V"	
+			fi
+			echo -n "$N " >> ${sTOPUP}/index.txt
+			J=$(($J + 1))	
+		done
+		echo "" >> ${sTOPUP}/index.txt
 
-	# copy ${SUBJECT}.nii.gz and ${SUBJECT}.bvec in tracula folder: 
-	echo "  copy data files to tracula folder .."
-	mkdir -p  ${oTRAC} 2> /dev/null 
-	cp ${SUBJECT}.nii ${SUBJECT}.bvec ${oTRAC}
-	cp ${sTOPUP}/PA/${SUBJECT}_210.bval ${oTRAC}/${SUBJECT}.bval
+		# Create a b0s_26.nii.gz file:
+		echo "  creating a b0s26 .nii data file .."	2>&1 | tee -a $LOG_FILE	
+		fslmerge -t ${sTOPUP}/b0s26.nii $VOLS	2>&1 | tee -a $LOG_FILE
+		rm -r ${sTOPUP}/vol*	2>&1 | tee -a $LOG_FILE
+	fi
+	
+	if [ ! -f ${EDDY}/${SUBJECT}.openmp.nii ]; then 
+		# Run topup (take time --- better in parallel analyses):
+		echo "  running topup script .."		2>&1 | tee -a $LOG_FILE
+		topup  --imain=${sTOPUP}/b0s26.nii --datain=${ACQUISITION_PARAMS} --config=${B02B0_CONF} --out=${sTOPUP}/topup --iout=${sTOPUP}/unwarped_b0 	2>&1 | tee -a $LOG_FILE
+		# if image doesn't look great consider --warpres=4
 
-	# make sure that freesurfer was done. Must have /'prefix'/freesurfer/${SUBJECT}/mri/apacr+aseg.mgz
-	# if not, run freesurfer:
-	echo "  create 001.mgz data file .."	
-	mkdir -p ${oFS}/bet
-	mkdir -p ${FS}/QA/orig
-	#dcm2nii ${FIRST_EMPRAGE_DICOM} ${FS}/QA/orig/${SUBJECT}_001.nii
-	cp ${ANAT} ${FS}/QA/orig/${SUBJECT}_001.nii
-	bet ${FS}/QA/orig/${SUBJECT}_001.nii ${FS}/QA/orig/${SUBJECT}_001_brain.nii -R -S -B -f 0.3
-	mri_convert ${FS}/QA/orig/${SUBJECT}_001_brain.nii ${oFS}/001.mgz
-	echo "  run recon-all script .."	
-	recon-all -s ${SUBJECT} -all
+		# Run eddy #####eddy works in parallel and takes up a lot of CPU. Must run serial analyses:
+		echo "  running eddy script .."		2>&1 | tee -a $LOG_FILE
+		fslmaths ${sTOPUP}/unwarped_b0 -Tmean ${sTOPUP}/unwarped_b0 	2>&1 | tee -a $LOG_FILE
+		bet ${sTOPUP}/unwarped_b0 ${sTOPUP}/unwarped_b0_brain -m 
+		slicesdir ${sTOPUP}/unwarped_b0_brain.nii 	2>&1 | tee -a $LOG_FILE
+		eddy_openmp --imain=${sTOPUP}/${SUBJECT}_420.nii --mask=${sTOPUP}/unwarped_b0_brain_mask --acqp=${ACQUISITION_PARAMS} --index=${sTOPUP}/index.txt --bvecs=${sTOPUP}/${SUBJECT}_420.bvec --bvals=${sTOPUP}/${SUBJECT}_420.bval --topup=${sTOPUP}/topup --out=${EDDY}/${SUBJECT}.openmp --fep --verbose 	2>&1 | tee -a $LOG_FILE
+	fi
 
+	
+	if [ ! -f ${oFS}/001.mgz ]; then 
+		# get the first 210 volumes out of /data/dprojects/ENCORE/eddy/${SUBJECT}.nii.gz with fslroi
+		echo "  extract first 210 volumes from EDDY .nii data file .."			2>&1 | tee -a $LOG_FILE
+		fslroi  ${EDDY}/${SUBJECT}.nii ${SUBJECT}.nii 0 210		2>&1 | tee -a $LOG_FILE	
+
+		## get the 1st 210 bvecs out of /data/dprojects/ENCORE/eddy/${SUBJECT}_eddy_rotate_bvecs --> name it ${SUBJECT}.bvec 
+
+		# copy ${SUBJECT}.nii.gz and ${SUBJECT}.bvec in tracula folder: 
+		echo "  copy data files to tracula folder .."	2>&1 | tee -a $LOG_FILE
+		mkdir -p  ${oTRAC} 2> /dev/null 
+		cp ${SUBJECT}.nii ${SUBJECT}.bvec ${oTRAC}	2>&1 | tee -a $LOG_FILE
+		cp ${sTOPUP}/PA/${SUBJECT}_210.bval ${oTRAC}/${SUBJECT}.bval	2>&1 | tee -a $LOG_FILE
+
+		# make sure that freesurfer was done. Must have /'prefix'/freesurfer/${SUBJECT}/mri/apacr+aseg.mgz
+		# if not, run freesurfer:
+		echo "  create 001.mgz data file .."		2>&1 | tee -a $LOG_FILE
+		mkdir -p ${oFS}/bet
+		mkdir -p ${FS}/QA/orig
+		cp ${ANAT} ${FS}/QA/orig/${SUBJECT}_001.nii	2>&1 | tee -a $LOG_FILE
+		bet ${FS}/QA/orig/${SUBJECT}_001.nii ${FS}/QA/orig/${SUBJECT}_001_brain.nii -R -S -B -f 0.3	2>&1 | tee -a $LOG_FILE
+		mri_convert ${FS}/QA/orig/${SUBJECT}_001_brain.nii ${oFS}/001.mgz	2>&1 | tee -a $LOG_FILE
+	fi
+
+	
+	if [ ! -f ${sFS}/mri/apacr+aseg.mgz ]; then 
+		echo "  run recon-all script .."		2>&1 | tee -a $LOG_FILE
+		recon-all -s ${SUBJECT} -all	2>&1 | tee -a $LOG_FILE
+	fi
 	# check now if /'prefix'/freesurfer/${SUBJECT}/mri/apacr+aseg.mgz exists now
 
 
 	# make script
-	cat ${DMRIRC_TEMPLATE} | sed "s/template/${SUBJECT}/g" > ${TRAC}/scripts/dmrirc.${SUBJECT}
+	cat ${DMRIRC_TEMPLATE} | sed "s/template/${SUBJECT}/g" > ${TRAC}/scripts/dmrirc.${SUBJECT}	2>&1 | tee -a $LOG_FILE
 	# run tracula
 	cd ${TRAC}
-	echo "  run trac-all prep script  .."
-	trac-all -c scripts/dmrirc.${SUBJECT} -prep -noqa
+	echo "  run trac-all prep script  .."	2>&1 | tee -a $LOG_FILE
+	trac-all -c scripts/dmrirc.${SUBJECT} -prep -noqa	2>&1 | tee -a $LOG_FILE
 	if [ $MODEL == "1" ]; then
-		echo "  run trac-all model 1 script  .."
-		trac-all -c scripts/dmrirc.${SUBJECT} -bedp
+		echo "  run trac-all model 1 script  .."	2>&1 | tee -a $LOG_FILE
+		trac-all -c scripts/dmrirc.${SUBJECT} -bedp		2>&1 | tee -a $LOG_FILE
 	elif [ $MODEL == "2" ]; then
-		echo "  run trac-all model 2 script  .."
-		bedpostx_mgh  ${sTRAC}/dmri  --nf=2  --fudge=1  --bi=1000  --model=2  --f0  --ardf0   --rician
+		echo "  run trac-all model 2 script  .."	2>&1 | tee -a $LOG_FILE
+		bedpostx_mgh  ${sTRAC}/dmri  --nf=2  --fudge=1  --bi=1000  --model=2  --f0  --ardf0   --rician	2>&1 | tee -a $LOG_FILE
 	fi
-	echo "  run trac-all path script  .."
-	trac-all -c scripts/dmrirc.${SUBJECT} -path
+	echo "  run trac-all path script  .."	2>&1 | tee -a $LOG_FILE
+	trac-all -c scripts/dmrirc.${SUBJECT} -path		2>&1 | tee -a $LOG_FILE
 
 done
 
