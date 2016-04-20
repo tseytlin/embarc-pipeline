@@ -59,9 +59,8 @@ class Config:
 
 		#self.OASIS_template = data_dir+"/templates/OASIS-30_Atropos_template_in_MNI152_2mm.nii.gz"
 		#self.OASIS_labels = data_dir+"/templates/OASIS-TRT-20_jointfusion_DKT31_CMA_labels_in_MNI152_2mm.nii.gz"
-		#TODO: replace with normal values		
-		self.OASIS_template = "/usr/local/software/matlab/spm8/tpm/grey.nii.gz" 
-		self.OASIS_labels = "/data/gold-pype/data/templates/ROI_MNI_V4.nii.gz"
+		self.OASIS_template =  data_dir+"/templates/MNI_SPM_grey.nii.gz" 
+		self.OASIS_labels =  data_dir+"/templates/ROI_MNI_V4.nii.gz"
 
 
 
@@ -406,6 +405,7 @@ def preprocess2(config,useFieldmap=True,name='preprocess2'):
 		#TODO asym_se_time
 		#TODO dwell_time = 0.79 ??? different for encore
 		#TODO dwell_to_asym_ratio
+	#TODO: handle .img images if fieldmaps are not used
 
 	
 	# create dartel template

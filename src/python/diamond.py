@@ -168,14 +168,16 @@ def reward(directory,sequence):
 	cc2.inputs.white_mask = conf.ROI_white
 	
 		
-	
-	
-		
 	# connect components into a pipeline
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
-	task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct')])])
-	task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct')])])
+	#task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct')])])
+	#task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct')])])
+	task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct'),
+		('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
+	task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct'),
+		('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
+	
 	task.connect(ds1,'behav',dm1,"eprime_file")	
 	task.connect(ds2,'behav',dm2,"eprime_file")	
 
@@ -341,8 +343,13 @@ def efnback(directory,sequence):
 	# connect components into a pipeline
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
-	task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct')])])
-	task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct')])])
+	#task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct')])])
+	#task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct')])])
+	task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct'),
+		('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
+	task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct'),
+		('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
+	
 
 	task.connect([(pp1,cc1,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
 	task.connect([(pp1,cc2,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
@@ -435,7 +442,9 @@ def dynamic_faces(directory,sequence):
 	# connect components into a pipeline
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
-	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
+	#task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
+	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct'),
+		('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
 	task.connect([(pp,cc,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
 	task.connect(cc,"regressors",l1,"input.movement")	
 	task.connect(pp,'output.func',l1,'input.func')
@@ -579,7 +588,7 @@ def resting(directory,sequence):
 	maskave = dict()
 	gunzip = dict()
 	
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]:
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:
 		sca[mask] = CPAC.sca.create_sca(name_sca="sca_"+mask);
 		maskave[mask] = pe.Node(interface=afni.Maskave(),name="roi_ave_"+mask)
 		maskave[mask].inputs.outputtype = "NIFTI"
@@ -639,7 +648,7 @@ def resting(directory,sequence):
 	task.connect(nc,'outputspec.centrality_outputs',zscore,'inputspec.input_file')
 	task.connect(pp,'output.mask',zscore,'inputspec.mask_file')
 
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]:
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:
 		task.connect(filt,"out_file",maskave[mask],"in_file")
 		task.connect(filt,"out_file",sca[mask],"inputspec.functional_file")
 		task.connect(maskave[mask],"out_file",sca[mask],"inputspec.timeseries_one_d")
