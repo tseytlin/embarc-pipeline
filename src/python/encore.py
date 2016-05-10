@@ -158,7 +158,7 @@ def resting(directory,sequence):
 	maskave = dict()
 	gunzip = dict()
 	
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]:
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:
 		sca[mask] = CPAC.sca.create_sca(name_sca="sca_"+mask);
 		maskave[mask] = pe.Node(interface=afni.Maskave(),name="roi_ave_"+mask)
 		maskave[mask].inputs.outputtype = "NIFTI"
@@ -213,7 +213,7 @@ def resting(directory,sequence):
 	task.connect(nc,'outputspec.centrality_outputs',zscore,'inputspec.input_file')
 	task.connect(pp,'output.mask',zscore,'inputspec.mask_file')
 
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]: # add left vlpfc
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]: # add left vlpfc
 		task.connect(filt,"out_file",maskave[mask],"in_file")
 		task.connect(filt,"out_file",sca[mask],"inputspec.functional_file")
 		task.connect(maskave[mask],"out_file",sca[mask],"inputspec.timeseries_one_d")

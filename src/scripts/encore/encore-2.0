@@ -11,7 +11,7 @@ PROG_FILE=`basename $0`
 if [ -z $1 ];
 then
     PROG=`basename $0` 
-    echo "Usage: ${PROG} [-resting_state|-fieldmap] <dir1> ...[dirN]"
+    echo "Usage: ${PROG} [-resting_state_hr|-fieldmap] <dir1> ...[dirN]"
     echo "Run an ENCORE 2.0 analysis pipeline on the set of subject data directories." 
 exit 1
 fi
@@ -23,7 +23,7 @@ for DATA_DIR in $@
 do
 
 	# skip some flags
-	if [ $DATA_DIR == "-resting_state" ];
+	if [ $DATA_DIR == "-resting_state_hr"  -o $DATA_DIR == "-fieldmap" ];
 	then
 		FLAGS="${FLAGS} ${DATA_DIR}"
 		continue

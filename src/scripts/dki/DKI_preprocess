@@ -45,7 +45,7 @@ do
 	EDDY="${OUTPUT_PREFIX}/eddy/"	
 
 	TRAC="${OUTPUT_PREFIX}/tracula/"
-	sTRAC="${sTRAC}/${SUBJECT}"
+	sTRAC="${TRAC}/${SUBJECT}"
 	oTRAC="${sTRAC}/orig"
 	scTRAC="${TRAC}/scripts/"
 
@@ -141,19 +141,22 @@ do
 	fi
 
 	
-	if [ ! -f ${oFS}/001.mgz ]; then 
+	if [ ! -f ${oTRAC}/${SUBJECT}.bvec ]; then 
 		# get the first 210 volumes out of /data/dprojects/ENCORE/eddy/${SUBJECT}.nii.gz with fslroi
 		echo "  extract first 210 volumes from EDDY .nii data file .."			2>&1 | tee -a $LOG_FILE
-		fslroi  ${EDDY}/${SUBJECT}.nii ${SUBJECT}.nii 0 210		2>&1 | tee -a $LOG_FILE	
+		fslroi  ${EDDY}/${SUBJECT}.openmp.nii ${EDDY}/${SUBJECT}.nii 0 210		2>&1 | tee -a $LOG_FILE	
 
 		## get the 1st 210 bvecs out of /data/dprojects/ENCORE/eddy/${SUBJECT}_eddy_rotate_bvecs --> name it ${SUBJECT}.bvec 
+		sed 's/  / /g' ${EDDY}/${SUBJECT}.openmp.eddy_rotated_bvecs | cut -d ' ' -f 1-210 >  ${EDDY}/${SUBJECT}.bvec
 
 		# copy ${SUBJECT}.nii.gz and ${SUBJECT}.bvec in tracula folder: 
 		echo "  copy data files to tracula folder .."	2>&1 | tee -a $LOG_FILE
 		mkdir -p  ${oTRAC} 2> /dev/null 
-		cp ${SUBJECT}.nii ${SUBJECT}.bvec ${oTRAC}	2>&1 | tee -a $LOG_FILE
-		cp ${sTOPUP}/PA/${SUBJECT}_210.bval ${oTRAC}/${SUBJECT}.bval	2>&1 | tee -a $LOG_FILE
+		cp ${EDDY}/${SUBJECT}.nii ${EDDY}/${SUBJECT}.bvec ${oTRAC}	2>&1 | tee -a $LOG_FILE
+		cp ${sTOPUP}/PA/*${SUBJECT}*_210*.bval ${oTRAC}/${SUBJECT}.bval	2>&1 | tee -a $LOG_FILE
+	fi
 
+	if [ ! -f ${oFS}/001.mgz ]; then 
 		# make sure that freesurfer was done. Must have /'prefix'/freesurfer/${SUBJECT}/mri/apacr+aseg.mgz
 		# if not, run freesurfer:
 		echo "  create 001.mgz data file .."		2>&1 | tee -a $LOG_FILE
@@ -164,8 +167,7 @@ do
 		mri_convert ${FS}/QA/orig/${SUBJECT}_001_brain.nii ${oFS}/001.mgz	2>&1 | tee -a $LOG_FILE
 	fi
 
-	
-	if [ ! -f ${sFS}/mri/apacr+aseg.mgz ]; then 
+	if [ ! -f ${sFS}/mri/aparc+aseg.mgz ]; then 
 		echo "  run recon-all script .."		2>&1 | tee -a $LOG_FILE
 		recon-all -s ${SUBJECT} -all	2>&1 | tee -a $LOG_FILE
 	fi
@@ -173,7 +175,7 @@ do
 
 
 	# make script
-	cat ${DMRIRC_TEMPLATE} | sed "s/template/${SUBJECT}/g" > ${TRAC}/scripts/dmrirc.${SUBJECT}	2>&1 | tee -a $LOG_FILE
+	cat ${DMRIRC_TEMPLATE} | sed "s/template/${SUBJECT}/g" > ${TRAC}/scripts/dmrirc.${SUBJECT}
 	# run tracula
 	cd ${TRAC}
 	echo "  run trac-all prep script  .."	2>&1 | tee -a $LOG_FILE
