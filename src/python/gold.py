@@ -59,8 +59,9 @@ class Config:
 
 		#self.OASIS_template = data_dir+"/templates/OASIS-30_Atropos_template_in_MNI152_2mm.nii.gz"
 		#self.OASIS_labels = data_dir+"/templates/OASIS-TRT-20_jointfusion_DKT31_CMA_labels_in_MNI152_2mm.nii.gz"
-		self.OASIS_template =  data_dir+"/templates/MNI_SPM_grey.nii.gz" 
-		self.OASIS_labels =  data_dir+"/templates/ROI_MNI_V4.nii.gz"
+		#TODO: replace with normal values		
+		self.OASIS_template = data_dir+"/templates/MNI_SPM_grey.nii.gz" 
+		self.OASIS_labels = data_dir+"/templates/ROI_MNI_V4.nii.gz"
 
 
 
@@ -405,8 +406,12 @@ def preprocess2(config,useFieldmap=True,name='preprocess2'):
 		#TODO asym_se_time
 		#TODO dwell_time = 0.79 ??? different for encore
 		#TODO dwell_to_asym_ratio
-	#TODO: handle .img images if fieldmaps are not used
-
+	else:
+		# invert image using fslmats
+		convert_image = pe.Node(interface=math.MathsCommand(),name='convert_image')
+		convert_image.inputs.args = "-mul 1"
+		preproc.connect(coreg_func2struct,'coregistered_files',convert_image,'in_file')
+		
 	
 	# create dartel template
 	dartel_template = dartel.create_DARTEL_template()
@@ -423,7 +428,8 @@ def preprocess2(config,useFieldmap=True,name='preprocess2'):
 	if useFieldmap:
 		preproc.connect(fugue,'unwarped_file',norm_func,'apply_to_files')
 	else:
-		preproc.connect(coreg_func2struct,'coregistered_files',norm_func,'apply_to_files')
+		preproc.connect(convert_image,'out_file',norm_func,'apply_to_files')
+		#preproc.connect(coreg_func2struct,'coregistered_files',norm_func,'apply_to_files')
 
 	# now lets do normalization with DARTEL
 	norm_struct =  pe.Node(interface=spm.DARTELNorm2MNI(modulate=True),name='norm_struct')

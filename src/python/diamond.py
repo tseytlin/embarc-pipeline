@@ -168,23 +168,27 @@ def reward(directory,sequence):
 	cc2.inputs.white_mask = conf.ROI_white
 	
 		
+	
+	
+		
 	# connect components into a pipeline
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
-	#task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct')])])
-	#task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct')])])
-	task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct'),
-		('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
-	task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct'),
-		('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
-	
+	if useFieldmap:	
+		task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct'),
+			('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
+		task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct'),
+			('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
+	else:
+		task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct')])])
+		task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct')])])
 	task.connect(ds1,'behav',dm1,"eprime_file")	
 	task.connect(ds2,'behav',dm2,"eprime_file")	
 
 	task.connect([(pp1,cc1,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
 	task.connect([(pp1,cc2,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
 	task.connect(cc1,"regressors",merge_move,"in1")	
-	task.connect(cc2,"regressors",merge_move,"inp2")
+	task.connect(cc2,"regressors",merge_move,"in2")
 
 
 	task.connect(pp1,'output.func',merge_func,'in1')
@@ -343,13 +347,14 @@ def efnback(directory,sequence):
 	# connect components into a pipeline
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
-	#task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct')])])
-	#task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct')])])
-	task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct'),
-		('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
-	task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct'),
-		('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
-	
+	if useFieldmap:	
+		task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct'),
+			('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
+		task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct'),
+			('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
+	else:
+		task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct')])])
+		task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct')])])
 
 	task.connect([(pp1,cc1,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
 	task.connect([(pp1,cc2,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
@@ -442,9 +447,12 @@ def dynamic_faces(directory,sequence):
 	# connect components into a pipeline
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
-	#task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
-	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct'),
-		('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
+	if useFieldmap:	
+		task.connect([(ds,pp,[('func','input.func'),('struct','input.struct'),
+			('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
+	else:
+		task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])	
+
 	task.connect([(pp,cc,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
 	task.connect(cc,"regressors",l1,"input.movement")	
 	task.connect(pp,'output.func',l1,'input.func')
@@ -582,13 +590,13 @@ def resting(directory,sequence):
 	nc.inputs.inputspec.threshold_option = 1
 	nc.inputs.inputspec.threshold = 0.0744 
 	nc.inputs.inputspec.template = conf.OASIS_labels
-	zscore =  CPAC.network_centrality.get_zscore(wf_name='z_score')
+	zscore =  CPAC.network_centrality.get_cent_zscore(wf_name='z_score') # renamed in CPAC 0.3.6
 
 	sca = dict()
 	maskave = dict()
 	gunzip = dict()
 	
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:  
 		sca[mask] = CPAC.sca.create_sca(name_sca="sca_"+mask);
 		maskave[mask] = pe.Node(interface=afni.Maskave(),name="roi_ave_"+mask)
 		maskave[mask].inputs.outputtype = "NIFTI"
@@ -614,9 +622,11 @@ def resting(directory,sequence):
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
 	
-	#task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
-	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct'),
-		('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
+	if useFieldmap:	
+		task.connect([(ds,pp,[('func','input.func'),('struct','input.struct'),
+			('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
+	else:
+		task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])	
 	task.connect([(pp,nu,[('output.ufunc','source'),
 				 ('output.mask','brain_mask'),
 				 ('output.movement','movement')])])
@@ -655,11 +665,12 @@ def resting(directory,sequence):
 		task.connect(sca[mask],("outputspec.Z_score",subset,0),gunzip[mask],'in_file')
 		task.connect(sca[mask],"outputspec.Z_score",datasink,"data.sca."+mask)
 	
-	
-	task.connect(reho,"outputspec.z_score",datasink,"data.reho")
+	#z_score was available in 0.3.5 now it is raw_reho_map > 0.3.6
+	task.connect(reho,"outputspec.raw_reho_map",datasink,"data.reho")
 	task.connect(corroi,"out_file",datasink,"csv.@par5")
+	# alff_Z_img in 0.3.5 now in 0.3.6 falff_img	
 	for nm in alff_nm:	
-		task.connect(alff[nm],"outputspec.alff_Z_img",datasink,"data."+nm.lower())
+		task.connect(alff[nm],"outputspec.alff_img",datasink,"data."+nm.lower())
 	
 	task.connect(zscore,"outputspec.z_score_img",datasink,"data.nc")
 	
@@ -824,6 +835,7 @@ if __name__ == "__main__":
 		log.info("\n\nEFNBACK pipeline ...\n\n")
 		t = time.time()		
 		efnback = efnback(directory,"efnback")
+		#efnback.run()		
 		efnback.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
@@ -832,7 +844,8 @@ if __name__ == "__main__":
 		log.info("\n\nDynamic_Faces pipeline ...\n\n")
 		t = time.time()		
 		df = dynamic_faces(directory,"dynamic_faces")
-		df.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
+		df.run()		
+		#df.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	
