@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python
 # DIAMOND 1.0 Analysis Pipeline
 # Author: Eugene Tseytlin, Henry Chase (University of Pittsburgh)
 #
@@ -9,6 +9,7 @@ import gold
 
 ## Predefined constants ##
 conf = gold.Config()
+conf.time_repetition  = 2.0
 
 # default value to use fieldmap in the pipeline
 useFieldmap=False
@@ -25,60 +26,25 @@ def datasource(directory, sequence):
 	
 	# define some variables beforehand
 	subject=get_subject(directory)
-	
-	# figure out if this is new or old naming convention file
-	orig = False	
-	m = gl.glob(os.path.join(directory,"anat/T1MPRAGE*[0-9].nii"))
-	if len(m) > 0:
-		orig = True
-
-
 	outfields=['func', 'struct']
 
-	if orig:
-		# define templates for datasource
-		field_template = dict(func=sequence+"/*.img",struct="anat/T1MPRAGE*[0-9].nii")
-		template_args  = dict(func=[[]],struct=[[]])                
+	# define templates for datasource
+	field_template = dict(func=sequence+"/NII/s0*.nii",struct="1_MPRAGE/NII/"+subject+"*.nii")
+	template_args  = dict(func=[[]],struct=[[]])                
 
-
-		# add behavior file to task oriented design
-		if sequence.startswith('reward'):
-			field_template['behav'] = sequence+"/*Reward_Task*.txt"
-			template_args['behav']  = [[]]
-		elif sequence.startswith('efnback'):
-			field_template['behav'] = sequence+"/EFNBACK_NewEye*.txt"
-			template_args['behav']  = [[]]
-		elif sequence.startswith('dynamic_faces'):
-			field_template['behav'] = sequence+"/subject*.txt"
-			template_args['behav']  = [[]]
-	else:
-
-		# define templates for datasource
-		field_template = dict(func=sequence+"/*"+sequence+".img",struct="anat/*_anat_crop.nii")
-		template_args  = dict(func=[[]],struct=[[]])                
-
-		
-
-		# add behavior file to task oriented design
-		if sequence.startswith('reward') or sequence.startswith('efnback') or sequence.startswith('dynamic_faces'):
-			field_template['behav'] = sequence+"/*task.txt"
-			template_args['behav']  = [[]]
-			outfields.append('behav')
-
-		if useFieldmap:
-			field_template['fieldmap_mag']   = "field_map/*_mag.nii"
-			field_template['fieldmap_phase'] ="field_map/*_phase.nii"
-			template_args['fieldmap_mag']  = [[]]
-			template_args['fieldmap_phase']  = [[]]
-			outfields.append('fieldmap_mag')
-			outfields.append('fieldmap_phase')
+	if useFieldmap:
+		field_template['fieldmap_mag']   = "field_map/*_mag.nii"
+		field_template['fieldmap_phase'] ="field_map/*_phase.nii"
+		template_args['fieldmap_mag']  = [[]]
+		template_args['fieldmap_phase']  = [[]]
+		outfields.append('fieldmap_mag')
+		outfields.append('fieldmap_phase')
 			
 	
 	# specify input dataset just pass through parameters
 	datasource = pe.Node(interface=nio.DataGrabber(
 						 infields=['subject_id','sequence'], 
-						 outfields=outfields),
-	                     name = "datasource_"+sequence)
+						 outfields=outfields),name = "datasource_"+sequence)
 	datasource.inputs.base_directory = os.path.abspath(directory)
 	datasource.inputs.template = '*'
 	datasource.inputs.field_template = field_template
@@ -94,7 +60,7 @@ def datasource(directory, sequence):
 EMBARC get subject name from a directory
 """
 def get_subject(directory):
-	m = re.search('diamond_[0-9]+.([0-9]+)',directory)
+	m = re.search('([0-9]+)',directory)
 	if m:
 		return m.group(1)
 	return "subject"
@@ -614,9 +580,12 @@ def resting(directory,sequence):
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
 	
-	#task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
-	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct'),
-		('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
+	if useFieldmap:
+		task.connect([(ds,pp,[('func','input.func'),('struct','input.struct'),
+			('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
+	else:
+		task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
+		
 	task.connect([(pp,nu,[('output.ufunc','source'),
 				 ('output.mask','brain_mask'),
 				 ('output.movement','movement')])])
@@ -749,20 +718,20 @@ if __name__ == "__main__":
 	
 	# get arguments
 	if len(sys.argv) < 2:
-		print "Usage: diamond.py "+opts+" <diamond subject directory>"
+		print "Usage: pebs.py "+opts+" <subject directory>"
 		sys.exit(1)
 	
 	# logging verbosity
 	import time
-	import nipype
 	import logging
+	import nipype
 	from nipype import config
 	import nipype.interfaces.matlab as mlab 
 	
 	# pick dataset that we'll be wroking on
 	for arg in sys.argv:
-		 if arg in opts:
-		 	opt_list.append(arg)
+		if arg in opts:
+			opt_list.append(arg)
 	directory = sys.argv[len(sys.argv)-1]
 	
 	# check directory
@@ -779,15 +748,9 @@ if __name__ == "__main__":
 	log_dir = os.path.abspath(directory)+"/logs"
 	if not os.path.exists(log_dir):
 		os.mkdir(log_dir)
-	cfg = dict(logging={'interface_level':'INFO',
-						'workflow_level':'INFO',
-						'log_to_file': True,
-						'log_directory': log_dir},
-    		   execution={'stop_on_first_crash': True,
-    		   			  'display_variable':disp,
-                      	  'hash_method': 'timestamp',
-                      	  'keep_inputs': True,
-                      	  'remove_unnecessary_outputs': False})
+	cfg = dict(logging={'interface_level':'INFO','workflow_level':'INFO','log_to_file': True,'log_directory': log_dir},
+		 execution={'stop_on_first_crash': True,'display_variable':disp,
+		 'hash_method': 'timestamp','keep_inputs':True,'remove_unnecessary_outputs': False})
 	config.update_config(cfg)
 	nipype.logging.update_logging(config)
 	log = nipype.logging.getLogger('workflow')
@@ -804,37 +767,12 @@ if __name__ == "__main__":
 		useFieldmap = True
 
 	
-	if check_sequence(opt_list,directory,"reward"):
-		log.info("\n\nREWARD pipeline ...\n\n")
-		t = time.time()		
-		reward = reward(directory,"reward")
-		reward.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
-		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
-
-	
-	if check_sequence(opt_list,directory,"resting_state"):
+	if check_sequence(opt_list,directory,"2_REST"):
 		log.info("\n\nRESTING pipeline ...\n\n")
 		t = time.time()		
-		resting = resting(directory,"resting_state")
+		resting = resting(directory,"2_REST")
 		#resting.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
 		resting.run()
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
-
-	if check_sequence(opt_list,directory,"efnback"):
-		log.info("\n\nEFNBACK pipeline ...\n\n")
-		t = time.time()		
-		efnback = efnback(directory,"efnback")
-		efnback.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
-		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
-
-	
-	if check_sequence(opt_list,directory,"dynamic_faces"):
-		log.info("\n\nDynamic_Faces pipeline ...\n\n")
-		t = time.time()		
-		df = dynamic_faces(directory,"dynamic_faces")
-		df.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
-		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
-
-	
-		
 	log.info("\n\npipeline complete\n\n")
+	

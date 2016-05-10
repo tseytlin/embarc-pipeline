@@ -23,7 +23,11 @@ for DATA_DIR in $@
 do
 
 	# skip some flags
+<<<<<<< HEAD
 	if [ $DATA_DIR == "-resting_state_hr"  -o $DATA_DIR == "-fieldmap" ];
+=======
+	if [ $DATA_DIR == "-resting_state" -o $DATA_DIR == "-fieldmap" ];
+>>>>>>> 352a05ad00b1d57fdd9fcbd1510a3bdff30961b3
 	then
 		FLAGS="${FLAGS} ${DATA_DIR}"
 		continue

@@ -32,7 +32,7 @@ do
 		echo "skipping $SUBJECT no diff_210 found in ${INPUT_PREFIX}/*${SUBJECT}" 2>&1 | tee -a $ULOG_FILE
 		continue
 	fi
-	echo "processing $SUBJECT .."  2>&1 | tee -a $ULOG_FILE
+	echo "pre-processing $SUBJECT .."  2>&1 | tee -a $ULOG_FILE
 	
 	IDIR="${INPUT_PREFIX}/*${SUBJECT}/diff_210/"	
 	ANAT="${INPUT_PREFIX}/*${SUBJECT}/anat/*_orient.nii"	
@@ -167,6 +167,25 @@ do
 		mri_convert ${FS}/QA/orig/${SUBJECT}_001_brain.nii ${oFS}/001.mgz	2>&1 | tee -a $LOG_FILE
 	fi
 
+done
+
+#########################################################
+
+for SUBJECT in $(cat $SUBJECT_LIST)
+do
+	TRAC="${OUTPUT_PREFIX}/tracula/"
+	sTRAC="${TRAC}/${SUBJECT}"
+	
+	FS="${OUTPUT_PREFIX}/freesurfer/"
+	sFS="${FS}/${SUBJECT}"
+	oFS="${sFS}/mri/orig"
+
+	# set environment for FreeSurfer to work	
+	export SUBJECTS_DIR=${FS}
+	
+	{
+	echo "processing $SUBJECT .."  2>&1 | tee -a $ULOG_FILE
+
 	if [ ! -f ${sFS}/mri/aparc+aseg.mgz ]; then 
 		echo "  run recon-all script .."		2>&1 | tee -a $LOG_FILE
 		recon-all -s ${SUBJECT} -all	2>&1 | tee -a $LOG_FILE
@@ -190,6 +209,9 @@ do
 	echo "  run trac-all path script  .."	2>&1 | tee -a $LOG_FILE
 	trac-all -c scripts/dmrirc.${SUBJECT} -path		2>&1 | tee -a $LOG_FILE
 
+	echo "finished running $SUBJECT"  2>&1 | tee -a $ULOG_FILE
+	
+	}&
 done
 
 #TODO: add grep of skipped subjects in a log file at the end of the run.
