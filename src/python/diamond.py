@@ -529,10 +529,10 @@ def resting(directory,sequence):
 	# setup some constants
 	resting_roi_names = ['LeftInsula','RightInsula','LeftAmygdala',
 			     'RightAmygdala','LeftVS','RightVS','LeftBA9','RightBA9',
-			     'BR1','BR2','BR3','BR4','BR9'] #, 'leftVLPFC'
+			     'BR1','BR2','BR3','BR4','BR9', 'leftVLPFC']
 	resting_roi_images = [conf.ROI_L_insula,conf.ROI_R_insula,conf.ROI_L_amyg,conf.ROI_R_amyg,
 			conf.ROI_VS_L,conf.ROI_VS_R,conf.ROI_BA9_L,conf.ROI_BA9_R,
-			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9] #, conf.ROI_leftVLPFC
+			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9, conf.ROI_leftVLPFC]
 	
 	ds = datasource(directory,sequence)
 	pp = gold.preprocess2(conf,useFieldmap)
@@ -575,13 +575,13 @@ def resting(directory,sequence):
 	nc.inputs.inputspec.threshold_option = 1
 	nc.inputs.inputspec.threshold = 0.0744 
 	nc.inputs.inputspec.template = conf.OASIS_labels
-	zscore =  CPAC.network_centrality.get_cent_zscore(wf_name='z_score') # renamed in CPAC 0.3.6
+	zscore =  CPAC.network_centrality.get_zscore(wf_name='z_score')
 
 	sca = dict()
 	maskave = dict()
 	gunzip = dict()
 	
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:  
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]:
 		sca[mask] = CPAC.sca.create_sca(name_sca="sca_"+mask);
 		maskave[mask] = pe.Node(interface=afni.Maskave(),name="roi_ave_"+mask)
 		maskave[mask].inputs.outputtype = "NIFTI"
@@ -643,19 +643,19 @@ def resting(directory,sequence):
 	task.connect(nc,'outputspec.centrality_outputs',zscore,'inputspec.input_file')
 	task.connect(pp,'output.mask',zscore,'inputspec.mask_file')
 
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]:
 		task.connect(filt,"out_file",maskave[mask],"in_file")
 		task.connect(filt,"out_file",sca[mask],"inputspec.functional_file")
 		task.connect(maskave[mask],"out_file",sca[mask],"inputspec.timeseries_one_d")
 		task.connect(sca[mask],("outputspec.Z_score",subset,0),gunzip[mask],'in_file')
 		task.connect(sca[mask],"outputspec.Z_score",datasink,"data.sca."+mask)
 	
-	#z_score was available in 0.3.5 now it is raw_reho_map > 0.3.6
-	task.connect(reho,"outputspec.raw_reho_map",datasink,"data.reho")
+	
+	task.connect(reho,"outputspec.z_score",datasink,"data.reho")
 	task.connect(corroi,"out_file",datasink,"csv.@par5")
 	# alff_Z_img in 0.3.5 now in 0.3.6 falff_img	
 	for nm in alff_nm:	
-		task.connect(alff[nm],"outputspec.alff_img",datasink,"data."+nm.lower())
+		task.connect(alff[nm],"outputspec.alff_Z_img",datasink,"data."+nm.lower())
 	
 	task.connect(zscore,"outputspec.z_score_img",datasink,"data.nc")
 	
