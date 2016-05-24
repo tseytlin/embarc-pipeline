@@ -19,7 +19,8 @@ fi
 mkdir -p ${LOG_DIR} 2> /dev/null
 
 if [ -z $SUBJECT_LIST ]; then
-	echo "Usage: $0 <input dataset prefix> <output dataset prefix> <subject list file> [-model1|-model2]"
+	PR=$(basename $0)	
+	echo "Usage: $PR <input dataset prefix> <output dataset prefix> <subject list file> [-model1|-model2]"
 	exit 1;
 fi
 
