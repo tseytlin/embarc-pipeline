@@ -123,7 +123,9 @@ def reward(directory,sequence):
 	out_dir = os.path.abspath(directory+"/output/"+sequence)
 	if not os.path.exists(out_dir):
 		os.makedirs(out_dir)
-		
+
+	conf.modelspec_high_pass_filter_cutoff = 256	
+	
 	# some hard-coded sequence specific components
 	contrasts = []
 	contrasts.append(('RewardExpectancy','T', ['anticipationxanti^1'],[1]))
@@ -256,6 +258,8 @@ def efnback(directory,sequence):
 	import nipype.interfaces.io as nio           # Data i/o
 	import gold
 
+	conf.modelspec_high_pass_filter_cutoff = 128
+	
 	subject = get_subject(directory)
 	# define base directory
 	base_dir = os.path.abspath(directory+"/analysis/")
@@ -267,46 +271,25 @@ def efnback(directory,sequence):
 		
 	# some hard-coded sequence specific components
 	contrasts = []	
-	contrasts.append(("0back fear-noface","T",
-			["zerofear*bf(1)","zeroblank*bf(1)"],[1,-1]))
-	"""	
-	contrasts.append(("0back fear-noface","T",
-			["Sn(1)zerofear*bf(1)","Sn(2)zerofear*bf(1)","Sn(1)zeroblank*bf(1)",
-			"Sn(2)zeroblank*bf(1)"],[.5, .5,-.5,-.5]))
-	contrasts.append(("0back fear-neutface","T",
-			["Sn(1)zerofear*bf(1)","Sn(2)zerofear*bf(1)","Sn(1)zeroneutral*bf(1)",
-	"Sn(2)zeroneutral*bf(1)"],[.5, .5,-.5,-.5]))
-	contrasts.append(("0back hap-noface","T",["Sn(1)zerohappy*bf(1)","Sn(2)zerohappy*bf(1)","Sn(1)zeroblank*bf(1)", 
-	"Sn(2)zeroblank*bf(1)"],[.5, .5,-.5,-.5]))
-	contrasts.append(("0back hap-neutface","T",["Sn(1)zerohappy*bf(1)","Sn(2)zerohappy*bf(1)", "Sn(1)zeroneutral*bf(1)",
-	"Sn(2)zeroneutral*bf(1)"],[.5, .5,-.5,-.5]))
-	contrasts.append(("0back neut-noface","T",["Sn(1)zeroneutral*bf(1)","Sn(2)zeroneutral*bf(1)","Sn(1)zeroblank*bf(1)",
-	"Sn(2)zeroblank*bf(1)],[.5, .5,-.5,-.5]))
-	contrasts.append(("2back fear-noface","T",["Sn(1)twofear*bf(1)","Sn(2)twofear*bf(1)","Sn(1)twolank*bf(1)",
-	"Sn(2)twoblank*bf(1)],[.5, .5,-.5,-.5]))
-	contrasts.append(("2back fear-neutface","T",["Sn(1)twofear*bf(1)","Sn(2)twofear*bf(1)","Sn(1)twoneutral*bf(1)",
-	"Sn(2)twoneutral*bf(1)],[.5, .5,-.5,-.5]))
-	contrasts.append(("2back hap-noface","T",["Sn(1)twohappy*bf(1)","Sn(2)twohappy*bf(1)","Sn(1)twoblank*bf(1)",
-	"Sn(2)twoblank*bf(1)],[.5, .5,-.5,-.5]))
-	contrasts.append(("2back happy-neutface","T",["Sn(1)twohappy*bf(1)","Sn(2)twohappy*bf(1)","Sn(1)twoneutral*bf(1)",
-	"Sn(2)twoneautral*bf(1)],[.5, .5,-.5,-.5]))
-	contrasts.append(("2back noface-0back noface","T",["Sn(1)twoblank*bf(1)","Sn(2)twoblank*bf(1)","Sn(1)zeroblank*bf(1)",
-	"Sn(2)zeroblank*bf(1)],[.5, .5,-.5,-.5]))
-	contrasts.append(("2back neutral-0back neutral","T",["Sn(1)twoneautral*bf(1)","Sn(2)twoneutral*bf(1)",
-	"Sn(1)zeroneutal*bf(1)","Sn(2)zeroneutral*bf(1)],[.5, .5,-.5,-.5]))
-	contrasts.append(("2backfear-0back fear","T",["Sn(1)twofear*bf(1)","Sn(2)twofear*bf(1)","Sn(1)zerofear*bf(1)",
-	"Sn(2)zerofear*bf(1)],[.5, .5,-.5,-.5]))
-	contrasts.append(("2back happy-0back happy","T",["Sn(1)twohappy*bf(1)","Sn(2)twohappy*bf(1)","Sn(1)zerohappy*bf(1)",
-	"Sn(2)zerohappy*bf(1)],[.5, .5,-.5,-.5]))
-	contrasts.append(("2backemotion-2backnoface","T",["Sn(1)twofear*bf(1)","Sn(2)twofear*bf(1)","Sn(1)twohappy*bf(1)",
-	"Sn(2)twohappy*bf(1)","Sn(1)twoblank*bf(1)","Sn(2)twoblank*bf(1)],[.5,.5,.5,.5,-1,-1]))
-	contrasts.append(("0backemotion-0backnoface","T",["Sn(1)zerofear*bf(1)","Sn(2)zerofear*bf(1)","Sn(1)zerohappy*bf(1)",
-	"Sn(2)zerohappy*bf(1)","Sn(1)zeroblank*bf(1)","Sn(2)zeroblank*bf(1)],[.5,.5,.5,.5,-1,-1]))
-	contrasts.append(("2backemotion-2backneutral","T",["Sn(1)twofear*bf(1)","Sn(2)twofear*bf(1)","Sn(1)twohappy*bf(1)",
-	"Sn(2)twohappy*bf(1)","Sn(1)twoneutral*bf(1)","Sn(2)twoneutral*bf(1)],[.5,.5,.5,.5,-1,-1]))
-	contrasts.append(("0backemotion-0backnoface","T",["Sn(1)zerofear*bf(1)","Sn(2)zerofear*bf(1)","Sn(1)zerohappy*bf(1)",
-	"Sn(2)zerohappy*bf(1)","Sn(1)zerobneutral*bf(1)","Sn(2)zeroneutral*bf(1)],[.5,.5,.5,.5,-1,-1]))	
-	"""
+	contrasts.append(("0back fear-0back noface","T",["zerofear*bf(1)","zeroblank*bf(1)"],[1,-1]))
+	contrasts.append(("0back fear-0back neutral","T",["zerofear*bf(1)","zeroneutral*bf(1)"],[1,-1]))
+	contrasts.append(("0back happy-0back noface","T",["zerohappy*bf(1)","zeroblank*bf(1)"],[1,-1]))
+	contrasts.append(("0back happy-0back neutral","T",["zerohappy*bf(1)","zeroneutral*bf(1)"],[1,-1]))
+	contrasts.append(("0back neutral-0back noface","T",["zeroneutral*bf(1)","zeroblank*bf(1)"],[1,-1]))
+	contrasts.append(("2back fear-2back noface","T",["twofear*bf(1)","twoblank*bf(1)"],[1,-1]))
+	contrasts.append(("2back fear-2back neutral","T",["twofear*bf(1)","twoneutral*bf(1)"],[1,-1]))
+	contrasts.append(("2back happy-2back noface","T",["twohappy*bf(1)","twoblank*bf(1)"],[1,-1]))
+	contrasts.append(("2back happy-2back neutral","T",["twohappy*bf(1)","twoneutral*bf(1)"],[1,-1]))
+	contrasts.append(("2back neutral-2back noface","T",["twoneutral*bf(1)","twoblank*bf(1)"],[1,-1]))
+	contrasts.append(("2back noface-0back noface","T",["twoblank*bf(1)","zeroblank*bf(1)"],[1,-1]))
+	contrasts.append(("2back neutral-0back neutral","T",["twoneutral*bf(1)","zeroneutral*bf(1)"],[1,-1]))
+	contrasts.append(("2back fear-0back fear","T",["twofear*bf(1)","zerofear*bf(1)"],[1,-1]))
+	contrasts.append(("2back happy-0back happy","T",["twohappy*bf(1)","zerohappy*bf(1)"],[1,-1]))
+	contrasts.append(("2back emotion-2back noface","T",["twofear*bf(1)","twohappy*bf(1)","twoblank*bf(1)"],[.5,.5,-1]))
+	contrasts.append(("0back emotion-0back noface","T",["zerofear*bf(1)","zerohappy*bf(1)","zeroblank*bf(1)"],[.5,.5,-1]))
+	contrasts.append(("2back emotion-2back neutral","T",["twofear*bf(1)","twohappy*bf(1)","twoneutral*bf(1)"],[.5,.5,-1]))
+	contrasts.append(("0back emotion-0back neutral","T",["zerofear*bf(1)","zerohappy*bf(1)","zeroneutral*bf(1)"],[.5,.5,-1]))	
+	
 
 		
 
@@ -400,6 +383,8 @@ def dynamic_faces(directory,sequence):
 	import nipype.interfaces.io as nio           # Data i/o
 	import gold
 	
+	conf.modelspec_high_pass_filter_cutoff = 256
+
 	subject = get_subject(directory)
 	# define base directory
 	base_dir = os.path.abspath(directory+"/analysis/")
@@ -539,7 +524,7 @@ def resting(directory,sequence):
 		os.makedirs(out_dir)
 	subject = get_subject(directory)
 	
-	
+	conf.modelspec_high_pass_filter_cutoff = 256
 	
 	# setup some constants
 	resting_roi_names = ['LeftInsula','RightInsula','LeftAmygdala',
