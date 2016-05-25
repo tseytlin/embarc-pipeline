@@ -260,7 +260,9 @@ def create_inversion_args(stats,prefix):
 	
 def create_brightness_threshold(stats):
 	return float(stats)*.75
-	
+
+def create_scale_args(stats,prefix):
+	return prefix+str(float(stats))
 
 """
 EMBARC/DIAMOND 2.0 PreProcessing Pipeline
@@ -446,15 +448,23 @@ def preprocess2(config,useFieldmap=True,name='preprocess2'):
 	
 	# calculated brighness threshold for susan (mean image intensity * 0.75)
 	image_mean = pe.Node(interface=fsl.ImageStats(),name='image_mean')	
-	image_mean.inputs.op_string = "-m"
+	image_mean.inputs.op_string = "-M"
 	preproc.connect(bet_mean,'out_file',image_mean,'in_file')
+
+
+	# scale image so that mean 1000/original
+	scale_image = pe.Node(interface=math.MathsCommand(),name='scale_image')
+	preproc.connect(despike,'out_file',scale_image,'in_file')
+	preproc.connect(image_mean,('out_stat',create_scale_args, "-mul 1000 -div "),scale_image,'args')
+
 
 	# smooth image using SUSAN
 	susan = pe.Node(interface=fsl.SUSAN(), name="smooth")
-	#susan.inputs.brightness_threshold = config.susan_brightness_threshold 
+	susan.inputs.brightness_threshold = config.susan_brightness_threshold 
 	susan.inputs.fwhm = config.susan_fwhm
-	preproc.connect(despike,'out_file',susan,'in_file') 
-	preproc.connect(image_mean,('out_stat',create_brightness_threshold),susan,'brightness_threshold') 
+	preproc.connect(scale_image,'out_file',susan,'in_file') 
+	#preproc.connect(despike,'out_file',susan,'in_file') 
+	#preproc.connect(image_mean,('out_stat',create_brightness_threshold),susan,'brightness_threshold') 
 
 	# create a nice mask to output	
 	bet_func = pe.Node(interface=fsl.BET(), name="bet_func")

@@ -1,22 +1,7 @@
 function ert_eprime2dm(eprime_file)
 	% extract subject if possible
 	directory = fileparts(eprime_file);
-	participant = 'subject';
-	remote_site = '';
-	pt = regexp(eprime_file,'(.*)embarc_CU_([A-Z]{2}\d+)_\dR\d_mri_fmriraw_\d+/.*','tokens');
-	if ~isempty(pt)
-		maindir = char(pt{1}{1});
-		participant = char(pt{1}{2});
-		% figure out remote site
-	    pt = regexp(maindir,'.*/([A-Z]{2})/','tokens');
-	    if ~isempty(pt)
-	    	remote_site = char(pt{1});
-	    end
-	end
-
-	v1 = 1; %over 13
-	v2 = 1; %over 71
-
+	participant = 'subject'
 
 	[st data]= system(['eprime2csv ', eprime_file, ' 1']);
 	[head content] = parse_csv(data);
@@ -30,15 +15,17 @@ function ert_eprime2dm(eprime_file)
 	anticipation_onset=0;
 	outcome_trial = 0;
 	outcome_onset=0;
-	Value_R = 0;
-	PE_R = 0;
+	ant_duration = 0;
+	
+	trial_type = 0;
+	range = 0;
+	re_array = 0;
+	pe_array = 0;
+    
 
-	GamStim_RESP_c1 = 1;
-	GamStim_RESP_c2 = 2;
-	if strcmp(remote_site ,'SB')
-		GamStim_RESP_c1 = 5;
-		GamStim_RESP_c2 = 6;
-	end
+	GamStim_RESP_c1 = 2;
+	GamStim_RESP_c2 = 3;
+	
 
 	resp1 = 0;
 	response_onset=0;
@@ -55,13 +42,29 @@ function ert_eprime2dm(eprime_file)
 	out_losswin_onset=0;
 	out_lossloss =0;
 	out_lossloss_onset=0;
-	baseline = 0;
+	
+    	ant_mix = 0;
+	ant_mix_onset=0;
+	ant_neu = 0;
+	ant_neu_onset=0;
+	out_mixwin = 0;
+	out_mixwin_onset=0;
+	out_mixloss = 0;
+	out_mixloss_onset=0;
+	out_neuwin = 0;
+	out_neuwin_onset=0;
+	out_neuloss =0;
+	out_neuloss_onset=0;
+    
+    
+   	baseline = 0;
 	baseline_onset=0;
-	error_trial = 0;
+	
+    	error_trial = 0;
 	error_trial_onset=0;
 
-	% offset
-	Condition =         find(ismember(head3{1}, 'Condition')==1);	       %1
+	%%offset
+	Procedure =         find(ismember(head3{1}, 'Procedure')==1);	       %1
 	GamStim_OnsetTime = find(ismember(head3{1}, 'GamStim.OnsetTime')==1);  %27 
 	GamStim_RESP  =     find(ismember(head3{1}, 'GamStim.RESP')==1);       %28 
 	GamStim_RT    =     find(ismember(head3{1}, 'GamStim.RT')==1);         %29
@@ -72,203 +75,310 @@ function ert_eprime2dm(eprime_file)
 	FeedbackL_OnsetTime          = find(ismember(head3{1}, 'FeedbackL.OnsetTime')==1);           %10
 	FeedbackLN_OnsetTime         = find(ismember(head3{1}, 'FeedbackLN.OnsetTime')==1);          %13
 
+	% fix
+	MixedShuffleImage_OnsetTime = find(ismember(head3{1}, 'MixedShuffleImage.OnsetTime')==1);  %46
+	
+	NeutralShuffleImage_OnsetTime   = find(ismember(head3{1}, 'NeutralShuffleImage.OnsetTime')==1);    %40 
+	
+	%
 
-	first_scan = str2num(char(content3{1,1}(GamStim_OnsetTime)));
+    	first_scan = str2num(char(content3{1,1}(GamStim_OnsetTime)));
 
 
-	for i=1:24
-	   % trial_scan_time = str2num(char(content3{1,1}(GamStim_OnsetTime)));
+	for ii=1:48 % each block separately
+        
+	   trial_scan_time = str2num(char(content3{1,1}(GamStim_OnsetTime)));
 	    
 	    flag = 0;
-	    if isempty(str2num(char(content3{i}(GamStim_RESP)))) == 1
+	    if isempty(str2num(char(content3{ii}(GamStim_RESP)))) == 1
 	        
 	        flag = 1;
 	        error_trial = error_trial +1;
-	        error_trial_onset(error_trial) = str2num(char(content3{i}(GamStim_OnsetTime)))  - first_scan;
-	        baseline = baseline + 1;
-	        baseline_onset(baseline) = 17000 + str2num(char(content3{i}(GamStim_OnsetTime)))  - first_scan;
-	        
+	        error_trial_onset(error_trial) = str2num(char(content3{ii}(GamStim_OnsetTime)))  - first_scan;
+
+	    %change the error length    
 	    end
 	    
-	    if str2num(char(content3{i,1}(GamStim_RESP))) == GamStim_RESP_c1
-	        %response(i) =0;
+	    if str2num(char(content3{ii,1}(GamStim_RESP))) == GamStim_RESP_c1
+	        response(i) =0;
 	        resp1 = resp1 + 1;
-	        response_onset(resp1) = str2num(char(content3{i}(GamStim_OnsetTime))) - first_scan;
-	        baseline = baseline + 1;
-	        baseline_onset(baseline) = 17000 + str2num(char(content3{i}(GamStim_OnsetTime))) - first_scan;
-	        RT(resp1) = str2num(char(content3{i}(GamStim_RT)));
+	        response_onset(resp1) = str2num(char(content3{ii}(GamStim_OnsetTime))) - first_scan;
+	        RT(resp1) = str2num(char(content3{ii}(GamStim_RT)));
+            
 	    end
-	    if str2num(char(content3{i}(GamStim_RESP))) == GamStim_RESP_c2
-	        %response(i) =1;
+	    if str2num(char(content3{ii}(GamStim_RESP))) == GamStim_RESP_c2
+	        response(i) =1;
 	        resp1 = resp1 + 1;
-	        response_onset(resp1) = str2num(char(content3{i}(GamStim_OnsetTime))) - first_scan;
-	        baseline = baseline + 1;
-	        baseline_onset(baseline) = 17000 + str2num(char(content3{i}(GamStim_OnsetTime))) - first_scan;
-	        RT(resp1) = str2num(char(content3{i}(GamStim_RT)));
+	        response_onset(resp1) = str2num(char(content3{ii}(GamStim_OnsetTime))) - first_scan;
+	        RT(resp1) = str2num(char(content3{ii}(GamStim_RT)));
+            
 	    end
 	    
 	    
 	    if flag == 0;
-	        if strcmp(	content3{i}(Condition), 'RewardWin') == 1
-	            %     stimulus(i) = 1;
-	            %     outcome(i) = 1;
-	            %
-	            %     if response(i) == 1
-	            %     correct(i) = 1;
-	            %     end
-	            %     if response(i) == 0
-	            %     correct(i) = 0;
-	            %     end
-	      		 Value_R(resp1) = 0.5;
-	            PE_R(resp1) = 0.5;
+	        if (strcmp(content3{ii}(Procedure), 'RewardWinTrialProc') == 1) 
+	            
+              
 	            ant_win = ant_win + 1;
 	            out_winwin = out_winwin+1;
-	            ant_win_onset(ant_win) = str2num(char(content3{i}(RewardShuffleImage_OnsetTime))) - first_scan;
-		       	out_winwin_onset(out_winwin) = str2num(char(content3{i}(FeedbackR_OnsetTime ))) - first_scan;
-	       		anticipation_onset(resp1) = str2num(char(content3{i}(RewardShuffleImage_OnsetTime))) - first_scan;
-	            outcome_onset(resp1) = str2num(char(content3{i}(FeedbackR_OnsetTime ))) - first_scan;
+	            ant_win_onset(ant_win) = str2num(char(content3{ii}(RewardShuffleImage_OnsetTime))) - first_scan;
+		       	out_winwin_onset(out_winwin) = str2num(char(content3{ii}(FeedbackR_OnsetTime ))) - first_scan;
+	       		anticipation_onset(resp1) = str2num(char(content3{ii}(RewardShuffleImage_OnsetTime))) - first_scan;
+	            outcome_onset(resp1) = str2num(char(content3{ii}(FeedbackR_OnsetTime ))) - first_scan;
+                
+                ant_duration(resp1) = outcome_onset(resp1) - anticipation_onset(resp1);
+                
+                trial_type(resp1) = 1;
+                
+                range(resp1) = 1;
+                re_array(resp1) = 0.5;
+                pe_array(resp1) = 0.5;
+                
 			 end
 	        
-	        if strcmp(content3{i}(Condition), 'RewardNeu') == 1
-	            %     stimulus(i) = 1;
-	            %     outcome(i) = 0;
-	            %
-	            %     if response(i) == 0
-	            %     correct(i) = 1;
-	            %     end
-	            %     if response(i) == 1
-	            %     correct(i) = 0;
-	            %     end
-	            Value_R(resp1) = 0.5;
-	            PE_R(resp1) = -0.5;
+	        if strcmp(content3{ii}(Procedure), 'RewardNeuTrialProc') == 1
+	           
+
 	            ant_win = ant_win + 1;
 	            out_winloss = out_winloss+1;
-	            ant_win_onset(ant_win) = str2num(char(content3{i}(RewardShuffleImage_OnsetTime))) - first_scan;
-	            out_winloss_onset(out_winloss) = str2num(char(content3{i}(FeedbackRN_OnsetTime  ))) - first_scan;
-	            anticipation_onset(resp1) = str2num(char(content3{i}(RewardShuffleImage_OnsetTime))) - first_scan;
-	            outcome_onset(resp1) = str2num(char(content3{i}(FeedbackRN_OnsetTime ))) - first_scan;
+	            ant_win_onset(ant_win) = str2num(char(content3{ii}(RewardShuffleImage_OnsetTime))) - first_scan;
+	            out_winloss_onset(out_winloss) = str2num(char(content3{ii}(FeedbackRN_OnsetTime  ))) - first_scan;
+	            anticipation_onset(resp1) = str2num(char(content3{ii}(RewardShuffleImage_OnsetTime))) - first_scan;
+	            outcome_onset(resp1) = str2num(char(content3{ii}(FeedbackRN_OnsetTime ))) - first_scan;
 	            
+                ant_duration(resp1) = outcome_onset(resp1) - anticipation_onset(resp1);
+                
+                trial_type(resp1) = 2;
+                
+                range(resp1) = 1;
+                re_array(resp1) = 0.5;
+                pe_array(resp1) = -0.5;
+                
 	        end
 	        
-	        if strcmp(content3{i}(Condition), 'LossNeu') == 1
-	            %     stimulus(i) = 0;
-	            %     outcome(i) = 0;
-	            %
-	            %     if response(i) == 1
-	            %     correct(i) = 1;
-	            %     end
-	            %     if response(i) == 0
-	            %     correct(i) = 0;
-	            %     end
-	            Value_R(resp1) = -0.5;
-	            PE_R(resp1) = 0.25;
+	        if strcmp(content3{ii}(Procedure), 'LossNeuTrialProc') == 1
+	            
+                
+
 	            ant_loss = ant_loss + 1;
 	            out_losswin = out_losswin+1;
-	            ant_loss_onset(ant_loss) = str2num(char(content3{i}(LossShuffleImage_OnsetTime))) - first_scan;
-	            out_losswin_onset(out_losswin) = str2num(char(content3{i}(FeedbackLN_OnsetTime)))- first_scan;
-	            anticipation_onset(resp1) = str2num(char(content3{i}(LossShuffleImage_OnsetTime))) - first_scan;
-	            outcome_onset(resp1) = str2num(char(content3{i}(FeedbackLN_OnsetTime ))) - first_scan;
+	            ant_loss_onset(ant_loss) = str2num(char(content3{ii}(LossShuffleImage_OnsetTime))) - first_scan;
+	            out_losswin_onset(out_losswin) = str2num(char(content3{ii}(FeedbackLN_OnsetTime)))- first_scan;
+	            anticipation_onset(resp1) = str2num(char(content3{ii}(LossShuffleImage_OnsetTime))) - first_scan;
+	            outcome_onset(resp1) = str2num(char(content3{ii}(FeedbackLN_OnsetTime ))) - first_scan;
+                
+                ant_duration(resp1) = outcome_onset(resp1) - anticipation_onset(resp1);
+                
+                trial_type(resp1) = 3;
+                
+                range(resp1) = 0.75;
+                re_array(resp1) = -0.375;
+                pe_array(resp1) = 0.375;
+                
 	        end
 	        
-	        if strcmp(content3{i}(Condition), 'LossLose') == 1
-	            %     stimulus(i) = 0;
-	            %     outcome(i) = -1;
-	            %
-	            %     if response(i) == 0
-	            %     correct(i) = 1;
-	            %     end
-	            %     if response(i) == 1
-	            %     correct(i) = 0;
-	            %     end
-	            %
-	            Value_R(resp1) = -0.5;
-	            PE_R(resp1) = -0.25;
+	        if strcmp(content3{ii}(Procedure), 'LossLoseTrialProc') == 1
+	                            
+
 	            ant_loss = ant_loss + 1;
 	            out_lossloss = out_lossloss+1;
-	            ant_loss_onset(ant_loss) = str2num(char(content3{i}(LossShuffleImage_OnsetTime))) - first_scan;
-	            out_lossloss_onset(out_lossloss) = str2num(char(content3{i}(FeedbackL_OnsetTime)))- first_scan;
-	            anticipation_onset(resp1) = str2num(char(content3{i}(LossShuffleImage_OnsetTime))) - first_scan;
-	            outcome_onset(resp1) = str2num(char(content3{i}(FeedbackL_OnsetTime ))) - first_scan;
+	            ant_loss_onset(ant_loss) = str2num(char(content3{ii}(LossShuffleImage_OnsetTime))) - first_scan;
+	            out_lossloss_onset(out_lossloss) = str2num(char(content3{ii}(FeedbackL_OnsetTime)))- first_scan;
+	            anticipation_onset(resp1) = str2num(char(content3{ii}(LossShuffleImage_OnsetTime))) - first_scan;
+	            outcome_onset(resp1) = str2num(char(content3{ii}(FeedbackL_OnsetTime ))) - first_scan;
+                
+                ant_duration(resp1) = outcome_onset(resp1) - anticipation_onset(resp1);
+                
+                trial_type(resp1) = 4;
+                
+                range(resp1) = 0.75;
+                re_array(resp1) = -0.375;
+                pe_array(resp1) = -0.375;
+                
+            end
+            
+            if strcmp(content3{ii}(Procedure), 'MixedWin') == 1
+	            
+                
+ 	            ant_mix = ant_mix + 1;
+ 	            out_mixwin = out_mixwin+1;
+ 	            ant_mix_onset(ant_mix) = str2num(char(content3{ii}(MixedShuffleImage_OnsetTime))) - first_scan;
+ 	            out_mixwin_onset(out_mixwin) = str2num(char(content3{ii}(FeedbackR_OnsetTime)))- first_scan;
+ 	            anticipation_onset(resp1) = str2num(char(content3{ii}(MixedShuffleImage_OnsetTime))) - first_scan;
+	            outcome_onset(resp1) = str2num(char(content3{ii}(FeedbackR_OnsetTime ))) - first_scan;
+                
+                ant_duration(resp1) = outcome_onset(resp1) - anticipation_onset(resp1);
+                
+                trial_type(resp1) = 5;
+                
+                range(resp1) = 1.75;
+                re_array(resp1) = 0.125;
+                pe_array(resp1) = 0.875;
+                
 	        end
-	    end
+	        
+	        if strcmp(content3{ii}(Procedure), 'MixedLose') == 1
+	            
+                
+ 	            ant_mix = ant_mix + 1;
+ 	            out_mixloss = out_mixloss+1;
+ 	            ant_mix_onset(ant_mix) = str2num(char(content3{ii}(MixedShuffleImage_OnsetTime))) - first_scan;
+ 	            out_mixloss_onset(out_mixloss) = str2num(char(content3{ii}(FeedbackL_OnsetTime)))- first_scan;
+ 	            anticipation_onset(resp1) = str2num(char(content3{ii}(MixedShuffleImage_OnsetTime))) - first_scan;
+ 	            outcome_onset(resp1) = str2num(char(content3{ii}(FeedbackL_OnsetTime ))) - first_scan;
+                
+                ant_duration(resp1) = outcome_onset(resp1) - anticipation_onset(resp1);
+                
+                trial_type(resp1) = 6;
+                
+                range(resp1) = 1.75;
+                re_array(resp1) = 0.125;
+                pe_array(resp1) = -0.625;
+                
+            end
+            
+            if strcmp(content3{ii}(Procedure), 'NeutralCorrect') == 1
+	            
+                
+
+ 	            ant_neu = ant_neu + 1;
+ 	            out_neuwin = out_neuwin+1;
+ 	            ant_neu_onset(ant_neu) = str2num(char(content3{ii}(NeutralShuffleImage_OnsetTime))) - first_scan;
+ 	            out_neuwin_onset(out_neuwin) = str2num(char(content3{ii}(FeedbackLN_OnsetTime)))- first_scan;
+ 	            anticipation_onset(resp1) = str2num(char(content3{ii}(NeutralShuffleImage_OnsetTime))) - first_scan;
+ 	            outcome_onset(resp1) = str2num(char(content3{ii}(FeedbackLN_OnsetTime ))) - first_scan;
+                
+                ant_duration(resp1) = outcome_onset(resp1) - anticipation_onset(resp1);
+                
+                trial_type(resp1) = 7;
+                
+                range(resp1) = 0;
+                re_array(resp1) = 0;
+                pe_array(resp1) = 0;
+	        end
+	        
+	         if strcmp(content3{ii}(Procedure), 'NeutralIncorrect') == 1
+	            
+                
+
+ 	            ant_neu = ant_neu + 1;
+ 	            out_neuloss = out_neuloss + 1;
+ 	            ant_neu_onset(ant_neu) = str2num(char(content3{ii}(NeutralShuffleImage_OnsetTime))) - first_scan;
+ 	            out_neuloss_onset(out_neuloss) = str2num(char(content3{ii}(FeedbackRN_OnsetTime)))- first_scan;
+ 	            anticipation_onset(resp1) = str2num(char(content3{ii}(NeutralShuffleImage_OnsetTime))) - first_scan;
+ 	            outcome_onset(resp1) = str2num(char(content3{ii}(FeedbackRN_OnsetTime ))) - first_scan;
+                
+		        ant_duration(resp1) = outcome_onset(resp1) - anticipation_onset(resp1);
+		        
+		        trial_type(resp1) = 8;
+		        
+		        range(resp1) = 0;
+		        re_array(resp1) = 0;
+		        pe_array(resp1) = 0;
+	        end
+            
+            
+		end
 	end
 
-	names=cell(5,1);
-	onsets=cell(5,1);
-	durations=cell(5,1);
+    
+
+	% reward behav
+	clear st;
+	clear data;
+	clear head;
+	clear content;
+
+	if jj == 1
+	error_trial1 = error_trial;
+	end
+	    
+
+	 if error_trial > 0
+
+	     
+	names=cell(4,1);
+	onsets=cell(4,1);
+	durations=cell(4,1);
 
 
-	names{1}='response';
+	pmod = struct('name', {' '}, 'param', {}, 'poly',{});
+	pmod(2).name{1} = 'reward_expectancy';
+	pmod(2).param{1} = re_array;
+	pmod(2).poly{1} = 1;
+
+	pmod(2).name{2} = 'uncertainty';
+	pmod(2).param{2} = range;
+	pmod(2).poly{2} = 1;
+
+	pmod(3).name{1} = 'prediction_error';
+	pmod(3).param{1} = pe_array;
+	pmod(3).poly{1} = 1;
+
+	names{1}='questionmark';
+	%names{2}='response'; %?
 	names{2}='anticipation';
 	names{3}='outcome';
-	names{4}='baseline';
-	names{5}='error';
-
+	names{4}='errors';
 
 	onsets{1} = response_onset/1000;
 	onsets{2} = anticipation_onset/1000;
 	onsets{3} = outcome_onset/1000;
-	onsets{4} = (response_onset/1000)+17;
-
-	if error_trial > 0
-		onsets{5} = error_trial_onset/1000;
-	else
-		onsets{5} = [500];
-	end
+	onsets{4} = error_trial_onset/1000;
 
 
-	pmod = struct('name', {' '}, 'param', {}, 'poly',{});
-	pmod(2).name{1} = 'anti';
-	pmod(2).param{1} = Value_R;
-	pmod(2).poly{1} = 1;
 
-	pmod(3).name{1} = 'signedPE';
-	pmod(3).param{1} = PE_R;
-	pmod(3).poly{1} = 1;
-
-	%pmod(3).name{2} = 'outcome_PE';
-	%pmod(3).param{2} = PE_O;
-	%pmod(3).poly{2} = 1;
 
 
 	durations{1}=[4];
-	durations{2}=[6];
+	durations{2}= ant_duration/1000; %[6]; % trial specific
 	durations{3}=[1];
-	durations{4}=[3];
-	if error_trial > 0
-		durations{5}=[17];
-	else
-		durations{5}=[0];
+	durations{4}=[5];
+	 end
+
+	if error_trial == 0
+	 
+		names=cell(3,1);
+		onsets=cell(3,1);
+		durations=cell(3,1);
+
+
+		pmod = struct('name', {' '}, 'param', {}, 'poly',{});
+		pmod(2).name{1} = 'reward_expectancy';
+		pmod(2).param{1} = re_array;
+		pmod(2).poly{1} = 1;
+
+		pmod(2).name{2} = 'uncertainty';
+		pmod(2).param{2} = range;
+		pmod(2).poly{2} = 1;
+
+		pmod(3).name{1} = 'prediction_error';
+		pmod(3).param{1} = pe_array;
+		pmod(3).poly{1} = 1;
+
+		names{1}='questionmark';
+		%names{2}='response'; %?
+		names{2}='anticipation';
+		names{3}='outcome';
+		%names{4}='errors';
+
+		onsets{1} = response_onset/1000;
+		onsets{2} = anticipation_onset/1000;
+		onsets{3} = outcome_onset/1000;
+		%onsets{4} = error_trial_onset/1000;
+
+
+		durations{1}=[4];
+		durations{2}= ant_duration/1000; %[6]; % trial specific
+		durations{3}=[1];
+		%durations{4}=[5];
+	 
 	end
 
-	save([directory '/nDM_',participant,'_reward.mat'],'names','onsets','durations','pmod');
-
-	behaviour(1) = median(RT);
-	behaviour(2) = error_trial;
-	standard(1) = std(RT);
-
-	key(1:2,1) = cellstr('RewardTask');
-	key(1,2) = cellstr('medianRT');
-	key(2,2) = cellstr('TotalErrors');
-	key(1,3) = cellstr('Milliseconds');
-	key(2,3) = cellstr('Errors');
-
-
-	outputfiles = ([directory,'/',participant,'_Rewardbehaviour.csv']);
-	fid = fopen(outputfiles, 'wt');
-
-
-	fprintf(fid, '%s,', char([cellstr(key(1,1))]));
-	fprintf(fid, '%s,', char([cellstr(key(1,2))]));
-	fprintf(fid, '%d,', behaviour(1));
-	fprintf(fid, '%d,', standard(1));
-	fprintf(fid, '%s\n', char([cellstr(key(1,3))]));
-
-	fprintf(fid, '%s,', char([cellstr(key(2,1))]));
-	fprintf(fid, '%s,', char([cellstr(key(2,2))]));
-	fprintf(fid, '%d,', behaviour(2));
-	fprintf(fid, 'N/A,');
-	fprintf(fid, '%s\n', char([cellstr(key(2,3))]));
-
-	fclose(fid);
-
+	      
+	% design_matrix = char([directory2, '/nDM_check_reward.mat']);
+	% save(design_matrix,'names','onsets','durations', 'pmod');
+	 	design_matrix2 = char([directory, '/nDM_RE_PE_reward.mat']);
+	save(design_matrix2,'names','onsets','durations', 'pmod');
+	% 
+	error_array(i, jj) = error_trial;
