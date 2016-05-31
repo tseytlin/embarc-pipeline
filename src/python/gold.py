@@ -532,7 +532,7 @@ def load_design_matrix(mat_file,trim=0):
 		names  = convert_numpy(dm.get('names'),True)
 		onsets = convert_numpy(dm.get('onsets'))
 		durations = convert_numpy(dm.get('durations'))
-
+		
 		# load up values and convert them
 		# for PPPI remove last column for reward PPI; for ert last 3 columns
 		# error, posterror, misc
@@ -546,7 +546,7 @@ def load_design_matrix(mat_file,trim=0):
 		if 'pmod' in dm:
 			pmod = []
 			for i in range(0,len(dm.get('pmod'))):
-				if dm['pmod']['name'][i].size == 0:
+				if len(dm['pmod']['name'][i]) == 0:
 					pmod.append(None)
 				else:
 					name = str(dm['pmod']['name'][i])
@@ -555,7 +555,6 @@ def load_design_matrix(mat_file,trim=0):
 					pmod.append(Bunch(name=[name],param=[param],poly=[poly]))
 			bunch.pmod = pmod
 		bunches.append(bunch)
-
 	return bunches
 
 
@@ -596,6 +595,7 @@ def level1analysis(config,trim=0,name='level1'):
 	l1analysis = pe.Workflow(name=name)
 	inputnode = pe.Node(interface=util.IdentityInterface(fields=['movement','func','design_matrix','contrasts']),name='input')
 
+	
 	# specify design matrix model
 	modelspec = pe.Node(interface=model.SpecifySPMModel(), name= "modelspec")
 	modelspec.inputs.concatenate_runs   = config.modelspec_concatenate_runs
