@@ -53,7 +53,10 @@ class Config:
 		self.level1design_timing_units = 'secs'
 		self.level1estimate_estimation_method = {'Classical' : 1}
 		self.contrastestimate_use_derivs = True
-			
+		self.level1design_microtime_onset = 1
+		self.level1design_microtime_resolution = 16
+		self.level1design_model_serial_correlations = 'AR(1)'
+
 		bin_dir = os.path.dirname(os.path.realpath(__file__))
 		data_dir = os.environ.get("SUPPORT_DATA_DIR",bin_dir+"/../data")
 
@@ -548,6 +551,15 @@ def load_design_matrix(mat_file,trim=0):
 			for i in range(0,len(dm.get('pmod'))):
 				if len(dm['pmod']['name'][i]) == 0:
 					pmod.append(None)
+				elif len(dm['pmod']['name'][i]) > 1 and isinstance(dm['pmod']['name'][i],numpy.ndarray):
+					names = []
+					params = []
+					polys = []
+					for j in range(0,len(dm['pmod']['name'][i])):
+						names.append(str(dm['pmod']['name'][i][j]))
+						params.append(dm['pmod']['param'][i][j].tolist())
+						polys.append(dm['pmod']['poly'][i][j])
+					pmod.append(Bunch(name=names,param=params,poly=polys))
 				else:
 					name = str(dm['pmod']['name'][i])
 					param = dm['pmod']['param'][i].tolist()
@@ -611,6 +623,12 @@ def level1analysis(config,trim=0,name='level1'):
 	level1design.inputs.bases = config.level1design_bases
 	level1design.inputs.timing_units = config.level1design_timing_units
 	level1design.inputs.interscan_interval = config.time_repetition
+	level1design.inputs.microtime_onset = config.level1design_microtime_onset
+	level1design.inputs.microtime_resolution = config.level1design_microtime_resolution
+	level1design.inputs.model_serial_correlations = config.level1design_model_serial_correlations 
+
+
+
 	l1analysis.connect(modelspec,'session_info',level1design,'session_info')
 
 	# level 1 estimate
