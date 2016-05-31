@@ -1,7 +1,7 @@
-function ert_eprime2dm(eprime_file)
+function reward_eprime2dm(eprime_file)
 	% extract subject if possible
 	directory = fileparts(eprime_file);
-	participant = 'subject'
+	participant = 'subject';
 
 	[st data]= system(['eprime2csv ', eprime_file, ' 1']);
 	[head content] = parse_csv(data);
@@ -100,14 +100,12 @@ function ert_eprime2dm(eprime_file)
 	    end
 	    
 	    if str2num(char(content3{ii,1}(GamStim_RESP))) == GamStim_RESP_c1
-	        response(i) =0;
 	        resp1 = resp1 + 1;
 	        response_onset(resp1) = str2num(char(content3{ii}(GamStim_OnsetTime))) - first_scan;
 	        RT(resp1) = str2num(char(content3{ii}(GamStim_RT)));
             
 	    end
 	    if str2num(char(content3{ii}(GamStim_RESP))) == GamStim_RESP_c2
-	        response(i) =1;
 	        resp1 = resp1 + 1;
 	        response_onset(resp1) = str2num(char(content3{ii}(GamStim_OnsetTime))) - first_scan;
 	        RT(resp1) = str2num(char(content3{ii}(GamStim_RT)));
@@ -289,9 +287,9 @@ function ert_eprime2dm(eprime_file)
 	clear head;
 	clear content;
 
-	if jj == 1
-	error_trial1 = error_trial;
-	end
+	%if jj == 1
+		error_trial1 = error_trial;
+	%end
 	    
 
 	 if error_trial > 0
@@ -381,4 +379,4 @@ function ert_eprime2dm(eprime_file)
 	 	design_matrix2 = char([directory, '/nDM_RE_PE_reward.mat']);
 	save(design_matrix2,'names','onsets','durations', 'pmod');
 	% 
-	error_array(i, jj) = error_trial;
+	%error_array(i, jj) = error_trial;

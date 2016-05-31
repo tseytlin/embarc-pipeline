@@ -43,7 +43,7 @@ def datasource(directory, sequence):
 
 		# add behavior file to task oriented design
 		if sequence.startswith('reward'):
-			field_template['behav'] = sequence+"/*Reward_Task*.txt"
+			field_template['behav'] = sequence+"/*reward_*_task*.txt"
 			template_args['behav']  = [[]]
 		elif sequence.startswith('efnback'):
 			field_template['behav'] = sequence+"/EFNBACK_NewEye*.txt"
@@ -124,8 +124,9 @@ def reward(directory,sequence):
 	if not os.path.exists(out_dir):
 		os.makedirs(out_dir)
 
-	conf.modelspec_high_pass_filter_cutoff = 256	
-	
+	conf.modelspec_high_pass_filter_cutoff = 60	
+	conf.level1design_bases = {'hrf':{'derivs': [0,0]}}
+
 	# some hard-coded sequence specific components
 	contrasts = []
 	contrasts.append(('RewardExpectancy','T', ['anticipationxanti^1'],[1]))
@@ -259,7 +260,8 @@ def efnback(directory,sequence):
 	import gold
 
 	conf.modelspec_high_pass_filter_cutoff = 128
-	
+	conf.level1design_bases = {'hrf':{'derivs': [0,0]}}
+
 	subject = get_subject(directory)
 	# define base directory
 	base_dir = os.path.abspath(directory+"/analysis/")
@@ -384,6 +386,7 @@ def dynamic_faces(directory,sequence):
 	import gold
 	
 	conf.modelspec_high_pass_filter_cutoff = 256
+	conf.level1design_bases = {'hrf':{'derivs': [1,0]}} #TODO check
 
 	subject = get_subject(directory)
 	# define base directory

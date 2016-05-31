@@ -42,14 +42,14 @@ class Config:
 
 		self.dartel_fwhm = 6 #TODO Check value
 		self.dartel_voxel_size =  (2, 2, 2)
-		self.susan_brightness_threshold = 70 #200.0
+		self.susan_brightness_threshold = 750 #200.0
 		self.susan_fwhm = 6
 		
 		self.modelspec_concatenate_runs   = False
-		self.modelspec_high_pass_filter_cutoff = 256
+		self.modelspec_high_pass_filter_cutoff = 60 # reward only
 		self.modelspec_input_units = 'secs'
 		
-		self.level1design_bases = {'hrf':{'derivs': [1,0]}}
+		self.level1design_bases = {'hrf':{'derivs': [0,0]}}
 		self.level1design_timing_units = 'secs'
 		self.level1estimate_estimation_method = {'Classical' : 1}
 		self.contrastestimate_use_derivs = True
@@ -449,7 +449,8 @@ def preprocess2(config,useFieldmap=True,name='preprocess2'):
 	# calculated brighness threshold for susan (mean image intensity * 0.75)
 	image_mean = pe.Node(interface=fsl.ImageStats(),name='image_mean')	
 	image_mean.inputs.op_string = "-M"
-	preproc.connect(bet_mean,'out_file',image_mean,'in_file')
+	#preproc.connect(bet_mean,'out_file',image_mean,'in_file')
+	preproc.connect(despike,'out_file',image_mean,'in_file')
 
 
 	# scale image so that mean 1000/original
