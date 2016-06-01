@@ -1,4 +1,4 @@
-function ert_eprime2dm(eprime_file)
+function reward_eprime2dm_embsarc(eprime_file)
 	% extract subject if possible
 	directory = fileparts(eprime_file);
 	participant = 'subject';

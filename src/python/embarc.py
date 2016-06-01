@@ -363,7 +363,7 @@ class design_matrix(object):
 			# execute matlab script to generate nDM file
 			m = mlab.MatlabCommand()
 			m.inputs.mfile = False
-			m.inputs.script = sequence+"_eprime2dm(\'"+eprime+"\');"
+			m.inputs.script = sequence+"_eprime2dm_embarcs(\'"+eprime+"\');"
 			m.run();
 		
 			# get nDM file (again)

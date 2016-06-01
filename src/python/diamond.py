@@ -129,12 +129,13 @@ def reward(directory,sequence):
 
 	# some hard-coded sequence specific components
 	contrasts = []
-	contrasts.append(('RewardExpectancy','T', ['anticipationxanti^1'],[1]))
-	contrasts.append(('PredictionError','T', ['outcomexsignedPE^1'],[1]))
+	contrasts.append(('RewardExpectancy','T', ['anticipationxreward_expectancy^1*bf(1)'],[1]))
+	contrasts.append(('UncertainExpectancy','T', ['anticipationxuncertainty^1*bf(1)'],[1]))
+	contrasts.append(('PredictionError','T', ['outcomexprediction_error^1*bf(1)'],[1]))
 
 	ppi_contrasts = []
-	ppi_contrasts.append(('RewardExpectancy','T', ['PPI_anticipationxanti^1'],[1]))
-	ppi_contrasts.append(('PredictionError','T', ['PPI_outcomexsignedPE^1'],[1]))
+	ppi_contrasts.append(('RewardExpectancy','T', ['PPI_anticipationxreward_expectancy^1'],[1]))
+	ppi_contrasts.append(('PredictionError','T', ['PPI_outcomexprediction_error^1'],[1]))
 
 	# get components
 	ds1 = datasource(directory,sequence+"_1")
@@ -146,7 +147,7 @@ def reward(directory,sequence):
 	l1 = gold.level1analysis(conf);
 	l1.inputs.input.contrasts = contrasts
 
-	l2 = gold.level1analysis(conf,1,"level1_pppi");
+	l2 = gold.level1analysis(conf,0,"level1_pppi");
 	l2.inputs.input.contrasts = contrasts
 
 	# create DesignMatrix
@@ -224,7 +225,7 @@ def reward(directory,sequence):
 		pppi.inputs.voi_name = roi[0]
 		pppi.inputs.voi_file = roi[1]
 		pppi.inputs.subject = subject
-		task.connect(l1,'output.spm_mat_file',pppi,'spm_mat_file')
+		task.connect(l2,'output.spm_mat_file',pppi,'spm_mat_file')
 		
 		contrast = pe.Node(interface = spm.EstimateContrast(), name="contrast"+roi[0])
 		contrast.inputs.contrasts = ppi_contrasts
@@ -807,7 +808,8 @@ if __name__ == "__main__":
 		log.info("\n\nREWARD pipeline ...\n\n")
 		t = time.time()		
 		reward = reward(directory,"reward")
-		reward.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
+		reward.run()		
+		#reward.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	
@@ -815,8 +817,8 @@ if __name__ == "__main__":
 		log.info("\n\nRESTING pipeline ...\n\n")
 		t = time.time()		
 		resting = resting(directory,"resting_state")
-		#resting.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
-		resting.run()
+		resting.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
+		#resting.run()
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	if check_sequence(opt_list,directory,"efnback"):
@@ -832,8 +834,8 @@ if __name__ == "__main__":
 		log.info("\n\nDynamic_Faces pipeline ...\n\n")
 		t = time.time()		
 		df = dynamic_faces(directory,"dynamic_faces")
-		df.run()		
-		#df.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
+		#df.run()		
+		df.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	
