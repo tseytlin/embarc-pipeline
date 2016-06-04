@@ -554,7 +554,7 @@ def load_design_matrix(mat_file,trim=0):
 					param = dm['pmod']['param'][i].tolist()
 					poly = dm['pmod']['poly'][i]
 					pmod.append(Bunch(name=[name],param=[param],poly=[poly]))
-				elif len(dm['pmod']['name'][i]) > 0:
+				elif isinstance(dm['pmod']['name'][i],numpy.ndarray) and len(dm['pmod']['name'][i]) > 0:
 					names = []
 					params = []
 					polys = []
