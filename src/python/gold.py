@@ -549,16 +549,16 @@ def load_design_matrix(mat_file,trim=0):
 		if 'pmod' in dm:
 			pmod = []
 			for i in range(0,len(dm.get('pmod'))):
-				if isinstance(dm['pmod']['name'][i],str):
+				if isinstance(dm['pmod']['name'][i],str) or dm['pmod']['name'][i].size == 1:
 					name = str(dm['pmod']['name'][i])
 					param = dm['pmod']['param'][i].tolist()
 					poly = dm['pmod']['poly'][i]
 					pmod.append(Bunch(name=[name],param=[param],poly=[poly]))
-				elif isinstance(dm['pmod']['name'][i],numpy.ndarray) and len(dm['pmod']['name'][i]) > 0:
+				elif dm['pmod']['name'][i].size >  1:
 					names = []
 					params = []
 					polys = []
-					for j in range(0,len(dm['pmod']['name'][i])):
+					for j in range(0,dm['pmod']['name'][i].size):
 						names.append(str(dm['pmod']['name'][i][j]))
 						params.append(dm['pmod']['param'][i][j].tolist())
 						polys.append(dm['pmod']['poly'][i][j])
