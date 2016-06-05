@@ -549,7 +549,7 @@ def load_design_matrix(mat_file,trim=0):
 		if 'pmod' in dm:
 			pmod = []
 			for i in range(0,len(dm.get('pmod'))):
-				if isinstance(dm['pmod']['name'][i],str) or dm['pmod']['name'][i].size == 1:
+				if isinstance(dm['pmod']['name'][i],unicode) or dm['pmod']['name'][i].size == 1:
 					name = str(dm['pmod']['name'][i])
 					param = dm['pmod']['param'][i].tolist()
 					poly = dm['pmod']['poly'][i]
