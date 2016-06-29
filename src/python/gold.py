@@ -712,7 +712,7 @@ def task(pppi_trim_dm, pppi_rois):
 	
 	return task
 
-	
+
 """
 add printing and saving of files to a workflow
 workflow - where everything will be added
@@ -720,15 +720,25 @@ node     - node from which to get output files
 files	 - files that need to be printed and saved
 """
 def print_save_files(workflow,node,datasink,files):
+	return save_files(workflow,node,datasink,files,True)
+	
+"""
+add printing and saving of files to a workflow
+workflow - where everything will be added
+node     - node from which to get output files
+files	 - files that need to be printed and saved
+"""
+def save_files(workflow,node,datasink,files,doPrint):
 	import nipype.pipeline.engine as pe          # pypeline engine
 	import wrappers as wrap
 	# go over parameters
 	for param in files:
-		prnt= pe.Node(interface=wrap.Print(), name="print_"+param)
-		prnt.inputs.out_file = param+".ps"
 		workflow.connect(node,param,datasink,"data."+param)
-		workflow.connect(node,param,prnt,"in_file")	
-		workflow.connect(prnt,"out_file",datasink,"ps.@par"+param)
+		if doPrint:
+			prnt= pe.Node(interface=wrap.Print(), name="print_"+param)
+			prnt.inputs.out_file = param+".ps"
+			workflow.connect(node,param,prnt,"in_file")	
+			workflow.connect(prnt,"out_file",datasink,"ps.@par"+param)
 
 """
 extract and save a set of ROIs

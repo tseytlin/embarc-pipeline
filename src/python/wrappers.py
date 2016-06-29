@@ -103,6 +103,62 @@ class ASL(BaseInterface):
 		outputs['cbf_image'] = os.path.abspath(input_dir+"/meanCBF_"+subject+".nii")
 		outputs['cbf_value'] = mat['L']
 		return outputs
+
+class pCASLInputSpec(BaseInterfaceInputSpec): 
+	in_file = InputMultiPath(traits.List(File(exists=True)),desc="Input Functional 4D files",mandatory=True)
+	ref_file = InputMultiPath(traits.List(File(exists=True)),desc="Input Reference file",mandatory=True)
+	
+	
+class pCASLOutputSpec(TraitedSpec):
+	cbf_image = File(exists=True,desc="Mean CBF Image", mandatory=True)
+	cbf_value = traits.Float(desc = "CBF Value", mandatory=True)
+
+"""
+	pCASL Script Wrapper: runs asl_script matlab code
+"""
+class pCASL(BaseInterface):
+	"""
+	Run matlab cbfmap_base_pCASL to comput CBF image
+	Examples
+	--------
+
+	>>> import nipype.interfaces.spm as spm
+	>>> asl = ASL()
+	>>> asl.inputs.in_files = 'functional.nii'
+	>>> asl.inputs.first_image_type = 0
+	>>> asl.run() # doctest: +SKIP
+
+	"""
+	input_spec = pCASLInputSpec
+	output_spec = pCASLOutputSpec
+	
+  	
+	def _run_interface(self, runtime):
+		# setup parameters
+		in_file = str(self.inputs.in_file)
+		ref_file = str(self.inputs.in_file)
+		
+		d = dict(in_file=in_file,ref_file=ref_file)
+		myscript = Template("""
+		warning('off','all');
+		cbf = cbfmap_base_pCASL($in_file,$ref_file);
+		save([dirname($in_file) 'CBF_pCASL.mat'],'cbf');
+		exit;
+		""").substitute(d)
+		mlab = MatlabCommand(script=myscript,matlab_cmd="matlab -nodesktop -nosplash",mfile=True)
+		result = mlab.run()
+		return result.runtime
+
+	def _list_outputs(self):	
+		import scipy.io as sp	
+		outdir = os.path.dirname(self.inputs.in_file)
+		mat = sp.loadmat(os.path.abspath(outdir+"/CBF_pCASL.mat"),squeeze_me=True)
+
+		outputs = self._outputs().get()
+		outputs['cbf_image'] = os.path.join(outdir,"CBF_pCASL.img")
+		outputs['cbf_value'] = mat['cbf']
+		
+		return outputs
 		
 ##############################################################################		
 class PPPIInputSpec(BaseInterfaceInputSpec): 

@@ -12,7 +12,7 @@ conf = gold.Config()
 
 # default value to use fieldmap in the pipeline
 useFieldmap=False
-
+noPrint = False
 
 
 """
@@ -64,6 +64,12 @@ def datasource(directory, sequence):
 			field_template['behav'] = sequence+"/*task.txt"
 			template_args['behav']  = [[]]
 			outfields.append('behav')
+
+		if sequence.startswith('asl'):
+			field_template['func_ref'] = sequence+"/*"+sequence+"_ref.img"
+			template_args['func_ref']  = [[]]
+			outfields.append('func_ref')
+
 
 		if useFieldmap:
 			field_template['fieldmap_mag']   = "field_map/*_mag.nii"
@@ -237,11 +243,9 @@ def reward(directory,sequence):
 	
 
 	# print and save the output of the preprocess pipeline
-	#gold.print_save_files(task,pp1.get_node('output'),datasink,("func1","movement1","struct1","mask1"))	
-	#gold.print_save_files(task,pp2.get_node('output'),datasink,("func2","movement2","struct2","mask2"))
 	gold.print_save_files(task,pp1.get_node('output'),datasink,("struct","mask"))	
 	gold.print_save_files(task,l1.get_node('input'),datasink,("func","movement"))	
-	gold.print_save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images"))#,"pppi_Reward_VS_con_images"
+	gold.print_save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images"))
 
 
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
@@ -707,6 +711,153 @@ def preprocess(directory,sequence):
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
 	return task
 
+"""
+ASL sequence
+"""
+def asl(directory,sequence):
+	import nipype.pipeline.engine as pe          # pypeline engine
+	import nipype.interfaces.io as nio           # Data i/o
+	import gold
+	import nipype.interfaces.spm as spm          # spm
+	import nipype.interfaces.fsl as fsl          # fsl
+	import nipype.interfaces.fsl.maths as math  
+	import nipype.interfaces.utility as util     # utility
+	import nipype.interfaces.afni as afni	     # afni
+	import nipype.workflows.fmri.spm.preprocess as dartel # preprocess
+	import wrappers as wrap		
+	from nipype.interfaces.nipy.preprocess import Trim
+
+	# define base directory
+	base_dir = os.path.abspath(directory+"/analysis/")
+	if not os.path.exists(base_dir):
+		os.makedirs(base_dir)
+	out_dir = os.path.abspath(directory+"/output/"+sequence)
+	if not os.path.exists(out_dir):
+		os.makedirs(out_dir)
+		
+	# get components
+	inputnode = datasource(directory,sequence)
+	
+	# connect components into a pipeline
+	preproc = pe.Workflow(name=name)
+	preproc.base_dir = base_dir
+	
+	# lets do a workflow	
+	fsl.FSLCommand.set_default_output_type('NIFTI')
+	
+	
+	# realign 4D functional
+	realign = pe.Node(interface=spm.Realign(), name="realign")
+	realign.inputs.register_to_mean = True
+	preproc.connect(inputnode,"func",realign,"in_files")
+
+	# skull strip mean functional image
+	bet_mean = pe.Node(interface=fsl.BET(), name="bet_mean")
+	bet_mean.inputs.mask = config.bet_mask
+	bet_mean.inputs.frac = config.bet_frac
+	bet_mean.inputs.robust = config.bet_robust
+	bet_mean.inputs.vertical_gradient = config.bet_vertical_gradient
+	preproc.connect(realign,'mean_image',bet_mean,'in_file') 
+
+	# skull strip mean structural image
+	bet_struct = pe.Node(interface=fsl.BET(), name="bet_struct")
+	bet_struct.inputs.mask = config.bet_mask
+	bet_struct.inputs.frac = config.bet_frac
+	bet_struct.inputs.robust = config.bet_robust
+	bet_struct.inputs.vertical_gradient = config.bet_vertical_gradient
+	preproc.connect(inputnode,'struct',bet_struct,'in_file')	
+
+
+	# coregister images
+	coreg_func2struct = pe.Node(interface=spm.Coregister(),name="coreg_func2struct")
+	coreg_func2struct.inputs.jobtype = "estimate"
+ 	coreg_func2struct.inputs.cost_function = config.coregister_cost_function
+	coreg_func2struct.inputs.separation = config.coregister_separation
+	coreg_func2struct.inputs.tolerance = config.coregister_tolerance
+	coreg_func2struct.inputs.fwhm = config.coregister_fwhm
+	preproc.connect(bet_struct,'out_file',coreg_func2struct,'target')
+	preproc.connect(realign,'realigned_files',coreg_func2struct,'apply_to_files')
+	preproc.connect(bet_mean,'out_file',coreg_func2struct,'source')
+
+	# coregister reference images
+	coreg_ref2struct = pe.Node(interface=spm.Coregister(),name="coreg_ref2struct")
+	coreg_ref2struct.inputs.jobtype = "estimate"
+ 	coreg_ref2struct.inputs.cost_function = config.coregister_cost_function
+	coreg_ref2struct.inputs.separation = config.coregister_separation
+	coreg_ref2struct.inputs.tolerance = config.coregister_tolerance
+	coreg_ref2struct.inputs.fwhm = config.coregister_fwhm
+	preproc.connect(bet_struct,'out_file',coreg_ref2struct,'target')
+	preproc.connect(inputnode,'func_ref',coreg_ref2struct,'apply_to_files')
+	preproc.connect(inputnode,'func_ref',coreg_ref2struct,'source')
+
+
+	# invoke ASL script to create CBF mean image
+	pcasl = pe.Node(interface=wrap.pCASL(), name="pCASL")
+	preproc.connect(coreg_func2struct,'coregistered_files',pcasl,'in_file')
+	preproc.connect(coreg_ref2struct,'coregistered_files',pcasl,'ref_file')
+
+	# convert image using fslmats
+	convert_image = pe.Node(interface=math.MathsCommand(),name='convert_image')
+	convert_image.inputs.args = "-mul 1"
+	preproc.connect(pcasl,'cbf_image',convert_image,'in_file')
+		
+	
+	# create dartel template
+	dartel_template = dartel.create_DARTEL_template()
+	dartel_template.inputs.inputspec.template_prefix = 'Template'
+	preproc.connect(inputnode, 'struct',dartel_template,'inputspec.structural_files')
+
+
+	# now lets do normalization with DARTEL
+	norm_func =  pe.Node(interface=spm.DARTELNorm2MNI(modulate=True),name='norm_func')	
+	norm_func.inputs.fwhm = config.dartel_fwhm
+	norm_func.inputs.voxel_size = config.dartel_voxel_size
+	preproc.connect(dartel_template,'outputspec.template_file',norm_func,'template_file')
+	preproc.connect(dartel_template, 'outputspec.flow_fields', norm_func, 'flowfield_files')
+	preproc.connect(convert_image,'out_file',norm_func,'apply_to_files')
+	
+	# now lets do normalization with DARTEL
+	norm_struct =  pe.Node(interface=spm.DARTELNorm2MNI(modulate=True),name='norm_struct')
+	norm_struct.inputs.fwhm = config.dartel_fwhm  #TODO Check value
+	preproc.connect(dartel_template,'outputspec.template_file',norm_struct,'template_file')
+	preproc.connect(dartel_template, 'outputspec.flow_fields', norm_struct, 'flowfield_files')
+	preproc.connect(bet_struct,'out_file',norm_struct,'apply_to_files')
+
+		
+	# calculated brighness threshold for susan (mean image intensity * 0.75)
+	image_mean = pe.Node(interface=fsl.ImageStats(),name='image_mean')	
+	image_mean.inputs.op_string = "-M"
+	preproc.connect(norm_func,'normalized_files',image_mean,'in_file')
+
+
+	# smooth image using SUSAN
+	susan = pe.Node(interface=fsl.SUSAN(), name="smooth")
+	susan.inputs.fwhm = config.susan_fwhm
+	preproc.connect(norm_func,'normalized_files',susan,'in_file') 
+	preproc.connect(image_mean,('out_stat',create_brightness_threshold),susan,'brightness_threshold') 
+
+		            
+	# gather output
+	outputnode = pe.Node(interface=util.IdentityInterface(fields=['func','ufunc','mask','movement','struct']),name='output')
+	preproc.connect(despike,'out_file',outputnode, 'ufunc')
+	preproc.connect(susan,'smoothed_file',outputnode,'func')
+	preproc.connect(realign,'realignment_parameters',outputnode,'movement')
+	preproc.connect(norm_struct,'normalized_files',outputnode,'struct')
+	preproc.connect(bet_func,'mask_file',outputnode,'mask')
+
+	
+	# datasing			
+	datasink = pe.Node(nio.DataSink(), name='datasink')
+	datasink.inputs.base_directory = out_dir
+	
+	# print and save the output of the preprocess pipeline
+	gold.save_files(preproc,pp.get_node('output'),datasink,("func","movement","struct","mask"),!noPrint)	
+		
+	preproc.write_graph(dotfilename=sequence+"-workflow"))
+	return preproc
+
+
+
 
 # check sequence
 def check_sequence(opt_list,directory,seq):
@@ -741,10 +892,13 @@ def check_sequence(opt_list,directory,seq):
 	# else 	
 	return False
 
-
+########################################################################################
+#
 # run pipeline if used as standalone script
+#
+########################################################################################
 if __name__ == "__main__":	
-	opts = "[-dynamic_faces|-efnback|-reward|-resting_state|-fieldmap]"
+	opts = "[-dynamic_faces|-efnback|-reward|-resting_state|-asl|-fieldmap|-noprint]"
 	opt_list = []
 	
 	# get arguments
@@ -802,7 +956,8 @@ if __name__ == "__main__":
 	
 	if "-fieldmap" in opt_list:	
 		useFieldmap = True
-
+	if "-noprint" in opt_list:	
+		noPrint = True
 	
 	if check_sequence(opt_list,directory,"reward"):
 		log.info("\n\nREWARD pipeline ...\n\n")
@@ -836,6 +991,14 @@ if __name__ == "__main__":
 		df = dynamic_faces(directory,"dynamic_faces")
 		#df.run()		
 		df.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
+		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
+
+	if check_sequence(opt_list,directory,"asl"):
+		log.info("\n\nASL pipeline ...\n\n")
+		t = time.time()		
+		workflow = asl(directory,"asl")
+		workflow.run()		
+		#workflow.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	
