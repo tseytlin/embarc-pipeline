@@ -27,7 +27,7 @@ def datasource(directory, sequence):
 	
 	# define templates for datasource
 	outfields=['func', 'struct']
-	field_template = dict(func=sequence+"/*"+sequence+".img",struct="anat/*_anat_crop.nii")
+	field_template = dict(func=sequence+"/*"+sequence+".[ni]*",struct="anat/*_anat_crop.nii")
 	template_args  = dict(func=[[]],struct=[[]])                
 
 	if useFieldmap:
