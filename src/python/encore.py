@@ -184,8 +184,12 @@ def resting(directory,sequence):
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
 	
-	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct'),
-	('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
+	
+	if useFieldmap:	
+		task.connect([(ds,pp,[('func','input.func'),('struct','input.struct'),
+			('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
+	else:
+		task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
 	task.connect([(pp,nu,[('output.ufunc','source'),
 						 ('output.mask','brain_mask'),
 						 ('output.movement','movement')])])
