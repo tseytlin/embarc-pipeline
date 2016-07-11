@@ -243,9 +243,11 @@ def reward(directory,sequence):
 	
 
 	# print and save the output of the preprocess pipeline
-	gold.print_save_files(task,pp1.get_node('output'),datasink,("struct","mask"))	
-	gold.print_save_files(task,l1.get_node('input'),datasink,("func","movement"))	
-	gold.print_save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images"))
+	gold.save_files(task,pp1.get_node('output'),datasink,("struct","mask"), not noPrint)
+	gold.save_files(task,pp1.get_node('output'),datasing,("movement"), not noPrint)
+	gold.save_files(task,pp2.get_node('output'),datasing,("movement"), not noPrint)		
+	gold.save_files(task,l1.get_node('input'),datasink,("func"), not noPrint)	
+	gold.save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images"), not noPrint)
 
 
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
@@ -369,9 +371,11 @@ def efnback(directory,sequence):
 	datasink.inputs.base_directory = out_dir
 
 	# print and save the output of the preprocess pipeline
-	gold.print_save_files(task,pp1.get_node('output'),datasink,("struct","mask"))	
-	gold.print_save_files(task,l1.get_node('input'),datasink,("func","movement"))	
-	gold.print_save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images"))	
+	gold.save_files(task,pp1.get_node('output'),datasink,("struct","mask"), not noPrint)
+	gold.save_files(task,pp1.get_node('output'),datasing,("movement"), not noPrint)
+	gold.save_files(task,pp2.get_node('output'),datasing,("movement"), not noPrint)	
+	gold.save_files(task,l1.get_node('input'),datasink,("func"), not noPrint)	
+	gold.save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images"), not noPrint)	
 
 	
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
@@ -457,8 +461,8 @@ def dynamic_faces(directory,sequence):
 	datasink.inputs.base_directory = out_dir
 
 	# print and save the output of the preprocess pipeline
-	gold.print_save_files(task,pp.get_node('output'),datasink,("func","movement","struct","mask"))	
-	gold.print_save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images"))	
+	gold.save_files(task,pp.get_node('output'),datasink,("func","movement","struct","mask"), not noPrint)	
+	gold.save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images"),not noPrint)	
 
 	# now define PPI
 	ppi_contrasts = []	
@@ -669,7 +673,7 @@ def resting(directory,sequence):
 	
 
 	# print and save the output of the preprocess pipeline
-	gold.print_save_files(task,pp.get_node('output'),datasink,("func","movement","struct","mask"))	
+	gold.save_files(task,pp.get_node('output'),datasink,("func","movement","struct","mask"), not noPrint)	
 	
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
 	return task
@@ -739,7 +743,7 @@ def asl(directory,sequence):
 	inputnode = datasource(directory,sequence)
 	
 	# connect components into a pipeline
-	preproc = pe.Workflow(name=name)
+	preproc = pe.Workflow(name=sequence)
 	preproc.base_dir = base_dir
 	
 	# lets do a workflow	
@@ -753,28 +757,28 @@ def asl(directory,sequence):
 
 	# skull strip mean functional image
 	bet_mean = pe.Node(interface=fsl.BET(), name="bet_mean")
-	bet_mean.inputs.mask = config.bet_mask
-	bet_mean.inputs.frac = config.bet_frac
-	bet_mean.inputs.robust = config.bet_robust
-	bet_mean.inputs.vertical_gradient = config.bet_vertical_gradient
+	bet_mean.inputs.mask = conf.bet_mask
+	bet_mean.inputs.frac = conf.bet_frac
+	bet_mean.inputs.robust = conf.bet_robust
+	bet_mean.inputs.vertical_gradient = conf.bet_vertical_gradient
 	preproc.connect(realign,'mean_image',bet_mean,'in_file') 
 
 	# skull strip mean structural image
 	bet_struct = pe.Node(interface=fsl.BET(), name="bet_struct")
-	bet_struct.inputs.mask = config.bet_mask
-	bet_struct.inputs.frac = config.bet_frac
-	bet_struct.inputs.robust = config.bet_robust
-	bet_struct.inputs.vertical_gradient = config.bet_vertical_gradient
+	bet_struct.inputs.mask = conf.bet_mask
+	bet_struct.inputs.frac = conf.bet_frac
+	bet_struct.inputs.robust = conf.bet_robust
+	bet_struct.inputs.vertical_gradient = conf.bet_vertical_gradient
 	preproc.connect(inputnode,'struct',bet_struct,'in_file')	
 
 
 	# coregister images
 	coreg_func2struct = pe.Node(interface=spm.Coregister(),name="coreg_func2struct")
 	coreg_func2struct.inputs.jobtype = "estimate"
- 	coreg_func2struct.inputs.cost_function = config.coregister_cost_function
-	coreg_func2struct.inputs.separation = config.coregister_separation
-	coreg_func2struct.inputs.tolerance = config.coregister_tolerance
-	coreg_func2struct.inputs.fwhm = config.coregister_fwhm
+ 	coreg_func2struct.inputs.cost_function = conf.coregister_cost_function
+	coreg_func2struct.inputs.separation = conf.coregister_separation
+	coreg_func2struct.inputs.tolerance = conf.coregister_tolerance
+	coreg_func2struct.inputs.fwhm = conf.coregister_fwhm
 	preproc.connect(bet_struct,'out_file',coreg_func2struct,'target')
 	preproc.connect(realign,'realigned_files',coreg_func2struct,'apply_to_files')
 	preproc.connect(bet_mean,'out_file',coreg_func2struct,'source')
@@ -782,10 +786,10 @@ def asl(directory,sequence):
 	# coregister reference images
 	coreg_ref2struct = pe.Node(interface=spm.Coregister(),name="coreg_ref2struct")
 	coreg_ref2struct.inputs.jobtype = "estimate"
- 	coreg_ref2struct.inputs.cost_function = config.coregister_cost_function
-	coreg_ref2struct.inputs.separation = config.coregister_separation
-	coreg_ref2struct.inputs.tolerance = config.coregister_tolerance
-	coreg_ref2struct.inputs.fwhm = config.coregister_fwhm
+ 	coreg_ref2struct.inputs.cost_function = conf.coregister_cost_function
+	coreg_ref2struct.inputs.separation = conf.coregister_separation
+	coreg_ref2struct.inputs.tolerance = conf.coregister_tolerance
+	coreg_ref2struct.inputs.fwhm = conf.coregister_fwhm
 	preproc.connect(bet_struct,'out_file',coreg_ref2struct,'target')
 	preproc.connect(inputnode,'func_ref',coreg_ref2struct,'apply_to_files')
 	preproc.connect(inputnode,'func_ref',coreg_ref2struct,'source')
@@ -810,50 +814,54 @@ def asl(directory,sequence):
 
 	# now lets do normalization with DARTEL
 	norm_func =  pe.Node(interface=spm.DARTELNorm2MNI(modulate=True),name='norm_func')	
-	norm_func.inputs.fwhm = config.dartel_fwhm
-	norm_func.inputs.voxel_size = config.dartel_voxel_size
+	norm_func.inputs.fwhm = conf.dartel_fwhm
+	norm_func.inputs.voxel_size = conf.dartel_voxel_size
 	preproc.connect(dartel_template,'outputspec.template_file',norm_func,'template_file')
 	preproc.connect(dartel_template, 'outputspec.flow_fields', norm_func, 'flowfield_files')
 	preproc.connect(convert_image,'out_file',norm_func,'apply_to_files')
 	
 	# now lets do normalization with DARTEL
 	norm_struct =  pe.Node(interface=spm.DARTELNorm2MNI(modulate=True),name='norm_struct')
-	norm_struct.inputs.fwhm = config.dartel_fwhm  #TODO Check value
+	norm_struct.inputs.fwhm = conf.dartel_fwhm  #TODO Check value
 	preproc.connect(dartel_template,'outputspec.template_file',norm_struct,'template_file')
 	preproc.connect(dartel_template, 'outputspec.flow_fields', norm_struct, 'flowfield_files')
 	preproc.connect(bet_struct,'out_file',norm_struct,'apply_to_files')
+
+	# skull strip mean structural image
+	bet_cbf = pe.Node(interface=fsl.BET(), name="bet_cbf")
+	bet_cbf.inputs.mask = conf.bet_mask
+	bet_cbf.inputs.frac = conf.bet_frac
+	bet_cbf.inputs.robust = conf.bet_robust
+	bet_cbf.inputs.vertical_gradient = conf.bet_vertical_gradient
+	preproc.connect(norm_func,'normalized_files',bet_cbf,'in_file')	
 
 		
 	# calculated brighness threshold for susan (mean image intensity * 0.75)
 	image_mean = pe.Node(interface=fsl.ImageStats(),name='image_mean')	
 	image_mean.inputs.op_string = "-M"
-	preproc.connect(norm_func,'normalized_files',image_mean,'in_file')
+	preproc.connect(bet_cbf,'out_file',image_mean,'in_file')
 
 
 	# smooth image using SUSAN
 	susan = pe.Node(interface=fsl.SUSAN(), name="smooth")
-	susan.inputs.fwhm = config.susan_fwhm
+	susan.inputs.fwhm = conf.susan_fwhm
 	preproc.connect(norm_func,'normalized_files',susan,'in_file') 
-	preproc.connect(image_mean,('out_stat',create_brightness_threshold),susan,'brightness_threshold') 
-
-		            
-	# gather output
-	outputnode = pe.Node(interface=util.IdentityInterface(fields=['func','ufunc','mask','movement','struct']),name='output')
-	preproc.connect(despike,'out_file',outputnode, 'ufunc')
+	preproc.connect(image_mean,('out_stat',gold.create_brightness_threshold),susan,'brightness_threshold') 
+	
+	outputnode = pe.Node(interface=util.IdentityInterface(fields=['func','mask','movement','struct']),name='output')
 	preproc.connect(susan,'smoothed_file',outputnode,'func')
 	preproc.connect(realign,'realignment_parameters',outputnode,'movement')
 	preproc.connect(norm_struct,'normalized_files',outputnode,'struct')
-	preproc.connect(bet_func,'mask_file',outputnode,'mask')
+	preproc.connect(bet_cbf,'mask_file',outputnode,'mask')
 
-	
 	# datasing			
 	datasink = pe.Node(nio.DataSink(), name='datasink')
 	datasink.inputs.base_directory = out_dir
 	
 	# print and save the output of the preprocess pipeline
-	gold.save_files(preproc,pp.get_node('output'),datasink,("func","movement","struct","mask"),!noPrint)	
+	gold.save_files(preproc,outputnode,datasink,("func","movement","struct","mask"),not noPrint)	
 		
-	preproc.write_graph(dotfilename=sequence+"-workflow"))
+	preproc.write_graph(dotfilename=sequence+"-workflow")
 	return preproc
 
 

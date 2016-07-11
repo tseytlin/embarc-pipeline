@@ -105,9 +105,8 @@ class ASL(BaseInterface):
 		return outputs
 
 class pCASLInputSpec(BaseInterfaceInputSpec): 
-	in_file = InputMultiPath(traits.List(File(exists=True)),desc="Input Functional 4D files",mandatory=True)
-	ref_file = InputMultiPath(traits.List(File(exists=True)),desc="Input Reference file",mandatory=True)
-	
+	in_file =  File(exists=True,desc="Input Functional 4D files",mandatory=True)
+	ref_file = File(exists=True,desc="Input Reference file",mandatory=True)
 	
 class pCASLOutputSpec(TraitedSpec):
 	cbf_image = File(exists=True,desc="Mean CBF Image", mandatory=True)
