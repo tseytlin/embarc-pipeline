@@ -1005,8 +1005,8 @@ if __name__ == "__main__":
 		log.info("\n\nASL pipeline ...\n\n")
 		t = time.time()		
 		workflow = asl(directory,"asl")
-		workflow.run()		
-		#workflow.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
+		#workflow.run()		
+		workflow.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	
