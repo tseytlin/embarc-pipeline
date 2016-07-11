@@ -110,7 +110,7 @@ class pCASLInputSpec(BaseInterfaceInputSpec):
 	
 class pCASLOutputSpec(TraitedSpec):
 	cbf_image = File(exists=True,desc="Mean CBF Image", mandatory=True)
-	cbf_value = traits.Float(desc = "CBF Value", mandatory=True)
+	#cbf_value = traits.Float(desc = "CBF Value", mandatory=True)
 
 """
 	pCASL Script Wrapper: runs asl_script matlab code
@@ -134,14 +134,14 @@ class pCASL(BaseInterface):
   	
 	def _run_interface(self, runtime):
 		# setup parameters
-		in_file = str(self.inputs.in_file)
-		ref_file = str(self.inputs.in_file)
+		in_file = "'"+str(self.inputs.in_file)+"'"
+		ref_file = "'"+str(self.inputs.ref_file)+"'"
 		
 		d = dict(in_file=in_file,ref_file=ref_file)
 		myscript = Template("""
 		warning('off','all');
 		cbf = cbfmap_base_pCASL($in_file,$ref_file);
-		save([dirname($in_file) 'CBF_pCASL.mat'],'cbf');
+		save([dirname($in_file) '/CBF_pCASL.mat'],'cbf');
 		exit;
 		""").substitute(d)
 		mlab = MatlabCommand(script=myscript,matlab_cmd="matlab -nodesktop -nosplash",mfile=True)
@@ -151,11 +151,11 @@ class pCASL(BaseInterface):
 	def _list_outputs(self):	
 		import scipy.io as sp	
 		outdir = os.path.dirname(self.inputs.in_file)
-		mat = sp.loadmat(os.path.abspath(outdir+"/CBF_pCASL.mat"),squeeze_me=True)
+		#mat = sp.loadmat(os.path.abspath(outdir+"/CBF_pCASL.mat"),squeeze_me=True)
 
 		outputs = self._outputs().get()
 		outputs['cbf_image'] = os.path.join(outdir,"CBF_pCASL.img")
-		outputs['cbf_value'] = mat['cbf']
+		#outputs['cbf_value'] = mat['cbf']
 		
 		return outputs
 		
