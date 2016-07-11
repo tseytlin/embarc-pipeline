@@ -11,7 +11,7 @@ PROG_FILE=`basename $0`
 if [ -z $1 ];
 then
     PROG=`basename $0` 
-    echo "Usage: ${PROG} [-dynamic_faces|-efnback|-reward|-resting_state|-fieldmap] <dir1> ...[dirN]"
+    echo "Usage: ${PROG} [-dynamic_faces|-efnback|-reward|-resting_state|-fieldmap|-asl|-noprint] <dir1> ...[dirN]"
     echo "Run an DIAMOND 2.0 analysis pipeline on the set of subject data directories." 
 exit 1
 fi
@@ -26,7 +26,7 @@ for D in $@
 do
 
 	# skip some flags
-	if [ $D == "-dynamic_faces" -o $D == "-reward" -o $D == "-efnback" -o $D == "-resting_state"  -o $D == "-fieldmap" ];
+	if [ $D == "-dynamic_faces" -o $D == "-reward" -o $D == "-efnback" -o $D == "-resting_state"  -o $D == "-fieldmap" -o $D == "-asl" -o $D == "-noprint" ];
 	then
 		FLAGS="${FLAGS} ${D}"
 	elif [ -d $D ];then
