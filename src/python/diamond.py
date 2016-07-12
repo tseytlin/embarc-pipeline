@@ -880,7 +880,7 @@ def check_sequence(opt_list,directory,seq):
 		return False
 
 	# if no sequence specified, check QC failed condition
-	if len(opt_list) == 0:
+	#if len(opt_list) == 0:
 		#files = []
 		#files.append(directory+seq_dir+"/FAIL.txt")
 		#files.append(directory+seq_dir+"/FAIL_checked.txt")
@@ -893,12 +893,12 @@ def check_sequence(opt_list,directory,seq):
 		#		print "Error: looks like "+seq+" has failed QA, skipping .."
 		#		print "QA file: "+f
 		#		return False
-		return True
+	#	return True
 	# else if sequence specified, do it and ignore failed condition	
-	elif "-"+seq in opt_list:
-		return True
+	#elif "-"+seq in opt_list:
+	#	return True
 	# else 	
-	return False
+	return True
 
 ########################################################################################
 #

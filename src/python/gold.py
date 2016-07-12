@@ -107,7 +107,7 @@ class Config:
 		self.ROI_caudate_head_L = ROI_dir+"left_caudate"+ROI_suffix
 		self.ROI_caudate_head_R = ROI_dir+"right_caudate"+ROI_suffix
 		self.ROI_amygdala_LR = ROI_dir+"bilateral_amygdala"+ROI_suffix
-		self.ROI_leftVLPFC = "/data/gold-pype/data/OASIS_rois/leftVLPFC_2mm.nii"
+		self.ROI_leftVLPFC = ROI_dir+"leftVLPFC_2mm.nii"
 
 
 """
