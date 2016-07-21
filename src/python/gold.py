@@ -743,9 +743,10 @@ def save_files(workflow,node,datasink,files,doPrint):
 """
 extract and save a set of ROIs
 """
-def extract_save_rois(name,csv_name,task_name,task_units,roi_list,workflow,datasink):
+def extract_save_rois(workflow,node,node_param,datasink,name,task_name,task_units,roi_list):
 	import nipype.pipeline.engine as pe          # pypeline engine
 	import wrappers as wrap
+	from nipype.interfaces.utility import Function
 	
 	extract = pe.Node(interface=wrap.ROIExtractor(), name="extract_"+name)
 	extract.inputs.roi_images = list(zip(*roi_list)[1])
@@ -760,9 +761,9 @@ def extract_save_rois(name,csv_name,task_name,task_units,roi_list,workflow,datas
 	save_csv.inputs.task = task_name
 	save_csv.inputs.units = task_units
 	save_csv.inputs.names = list(zip(*roi_list)[0])
-	save_csv.inputs.output = csv_name
+	save_csv.inputs.output = name+".csv"
 	
-
+	workflow.connect(node,node_param,extract,"source")
 	workflow.connect(extract,"mat_file",save_csv,"ext")
 	workflow.connect(save_csv,"csv_file",datasink,"csv.@par"+name)
 

@@ -503,6 +503,10 @@ def dynamic_faces(directory,sequence):
 		task.connect(contrast,'con_images',datasink,"data.pppi_"+roi[0]+"_con_images")
 		task.connect(pppi,"spm_mat_file",datasink,"data.ppi_"+roi[0]+"_spm_file")
 	
+
+	# extract ROIs for 1st level
+	gold.extract_save_rois(task,l1.get_node('output'),('con_images',subset,0),datasink,"L1_AmygdalaROIs","DynamicFaces","n/a",pppi_rois)
+
 	
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
 	return task
@@ -870,35 +874,22 @@ def asl(directory,sequence):
 # check sequence
 def check_sequence(opt_list,directory,seq):
 	seq_dir = seq
-	if seq == "preprocess" and "-"+seq in opt_list:
-		return True	
-
+	
 	# check if directory exists
 	if not (os.path.exists(directory+seq_dir) or os.path.exists(directory+seq_dir+"_1")):
 		print "Error: data directory for "+seq+" does not exists, skipping .."
 		print "Missing directory: "+directory+seq_dir
 		return False
 
-	# if no sequence specified, check QC failed condition
-	#if len(opt_list) == 0:
-		#files = []
-		#files.append(directory+seq_dir+"/FAIL.txt")
-		#files.append(directory+seq_dir+"/FAIL_checked.txt")
-		#if seq != "flt":
-		#	files.append(directory+"/dicom_anatomical/FAIL.txt")
-		#	files.append(directory+"/dicom_anatomical/FAIL_checked.txt")
-		
-		#for f in files:
-		#	if os.path.exists(f):
-		#		print "Error: looks like "+seq+" has failed QA, skipping .."
-		#		print "QA file: "+f
-		#		return False
-	#	return True
+	# if no sequence specified, then run everything
+	if len(opt_list) == 0 :
+		return True
+
 	# else if sequence specified, do it and ignore failed condition	
-	#elif "-"+seq in opt_list:
-	#	return True
-	# else 	
-	return True
+	elif "-"+seq in opt_list:
+		return True
+
+	return False
 
 ########################################################################################
 #
@@ -964,8 +955,10 @@ if __name__ == "__main__":
 	
 	if "-fieldmap" in opt_list:	
 		useFieldmap = True
+		opt_list.remove("-fieldmap")
 	if "-noprint" in opt_list:	
 		noPrint = True
+		opt_list.remove("-noprint")
 	
 	if check_sequence(opt_list,directory,"reward"):
 		log.info("\n\nREWARD pipeline ...\n\n")
