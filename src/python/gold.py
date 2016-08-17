@@ -728,17 +728,23 @@ workflow - where everything will be added
 node     - node from which to get output files
 files	 - files that need to be printed and saved
 """
-def save_files(workflow,node,datasink,files,doPrint):
+def save_files(workflow,node,datasink,connectors,doPrint):
 	import nipype.pipeline.engine as pe          # pypeline engine
 	import wrappers as wrap
 	# go over parameters
-	for param in files:
-		workflow.connect(node,param,datasink,"data."+param)
+	for param in connectors:
+		input_param=param
+		output_param=param		
+		if isinstance(param, tuple):		
+			input_param=param[0]
+			output_param=param[1]		
+	
+		workflow.connect(node,input_param,datasink,"data."+output_param)
 		if doPrint:
-			prnt= pe.Node(interface=wrap.Print(), name="print_"+param)
-			prnt.inputs.out_file = param+".ps"
-			workflow.connect(node,param,prnt,"in_file")	
-			workflow.connect(prnt,"out_file",datasink,"ps.@par"+param)
+			prnt= pe.Node(interface=wrap.Print(), name="print_"+output_param)
+			prnt.inputs.out_file = output_param+".ps"
+			workflow.connect(node,input_param,prnt,"in_file")	
+			workflow.connect(prnt,"out_file",datasink,"ps.@par"+output_param)
 
 """
 extract and save a set of ROIs

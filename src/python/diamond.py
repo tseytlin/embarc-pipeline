@@ -243,11 +243,10 @@ def reward(directory,sequence):
 	
 
 	# print and save the output of the preprocess pipeline
-	gold.save_files(task,pp1.get_node('output'),datasink,("struct","mask"), not noPrint)
-	gold.save_files(task,pp1.get_node('output'),datasing,("movement"), not noPrint)
-	gold.save_files(task,pp2.get_node('output'),datasing,("movement"), not noPrint)		
-	gold.save_files(task,l1.get_node('input'),datasink,("func"), not noPrint)	
-	gold.save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images"), not noPrint)
+	gold.save_files(task,pp1.get_node('output'),datasink,["struct","mask"], not noPrint)
+	gold.save_files(task,merge_move,datasink,[("out","movement")], not noPrint)
+	gold.save_files(task,l1.get_node('input'),datasink,["func"], not noPrint)	
+	gold.save_files(task,l1.get_node('output'),datasink,["spm_mat_file","con_images"], not noPrint)
 
 
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
@@ -371,11 +370,10 @@ def efnback(directory,sequence):
 	datasink.inputs.base_directory = out_dir
 
 	# print and save the output of the preprocess pipeline
-	gold.save_files(task,pp1.get_node('output'),datasink,("struct","mask"), not noPrint)
-	gold.save_files(task,pp1.get_node('output'),datasing,("movement"), not noPrint)
-	gold.save_files(task,pp2.get_node('output'),datasing,("movement"), not noPrint)	
-	gold.save_files(task,l1.get_node('input'),datasink,("func"), not noPrint)	
-	gold.save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images"), not noPrint)	
+	gold.save_files(task,pp1.get_node('output'),datasink,["struct","mask"], not noPrint)
+	gold.save_files(task,merge_move,datasink,[("out","movement")], not noPrint)
+	gold.save_files(task,l1.get_node('input'),datasink,["func"], not noPrint)	
+	gold.save_files(task,l1.get_node('output'),datasink,["spm_mat_file","con_images"], not noPrint)	
 
 	
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
@@ -461,8 +459,8 @@ def dynamic_faces(directory,sequence):
 	datasink.inputs.base_directory = out_dir
 
 	# print and save the output of the preprocess pipeline
-	gold.save_files(task,pp.get_node('output'),datasink,("func","movement","struct","mask"), not noPrint)	
-	gold.save_files(task,l1.get_node('output'),datasink,("spm_mat_file","con_images"),not noPrint)	
+	gold.save_files(task,pp.get_node('output'),datasink,["func","movement","struct","mask"], not noPrint)	
+	gold.save_files(task,l1.get_node('output'),datasink,["spm_mat_file","con_images"],not noPrint)	
 
 	# now define PPI
 	ppi_contrasts = []	
@@ -677,7 +675,7 @@ def resting(directory,sequence):
 	
 
 	# print and save the output of the preprocess pipeline
-	gold.save_files(task,pp.get_node('output'),datasink,("func","movement","struct","mask"), not noPrint)	
+	gold.save_files(task,pp.get_node('output'),datasink,["func","movement","struct","mask"], not noPrint)	
 	
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
 	return task
@@ -863,7 +861,7 @@ def asl(directory,sequence):
 	datasink.inputs.base_directory = out_dir
 	
 	# print and save the output of the preprocess pipeline
-	gold.save_files(preproc,outputnode,datasink,("func","movement","struct","mask"),not noPrint)	
+	gold.save_files(preproc,outputnode,datasink,["func","movement","struct","mask"],not noPrint)	
 		
 	preproc.write_graph(dotfilename=sequence+"-workflow")
 	return preproc
