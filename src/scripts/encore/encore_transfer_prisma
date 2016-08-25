@@ -88,7 +88,7 @@ do
 	
 	# convert all DICOM images to output target directory	
 	echo "  converting DICOM to NIFTI for $DIR_NAME .." 2>&1 | tee -a $LOG_FILE
-	for x in dir gre_field rs_2mm T1 UNI
+	for x in dir gre_field rs_2mm T1 UNI task
 	do
 		dcm2nii -c n -g n -o $TARGET_DIR $DIR/*$x* >> $LOG_FILE 2>&1
 	done
@@ -122,6 +122,10 @@ do
 	[ $q -eq 0 ] && mkdir $TARGET_DIR/resting_state_hr2 >& /dev/null
 	[ $q -eq 0 ] && mv ${FILES[1]} $TARGET_DIR/resting_state_hr2 2>&1 | tee -a $LOG_FILE 	
 
+	check_dir $DIR task; q=$?
+	[ $q -eq 0 ] && mkdir $TARGET_DIR/industrial >& /dev/null
+	[ $q -eq 0 ] && mv $TARGET_DIR/*task*.nii $TARGET_DIR/industrial 2>&1 | tee -a $LOG_FILE 	
+	[ $q -eq 0 ] && cp $DIR/BHV*/Scan/*.[et]* $TARGET_DIR/industrial 2>&1 | tee -a $LOG_FILE 
 
 	check_dir $DIR dir35 ; q=$?
 	[ $q -eq 0 ] && mkdir $TARGET_DIR/diff_35 >& /dev/null
@@ -136,7 +140,7 @@ do
 	[ $q -eq 0 ] && mv $TARGET_DIR/*dir105* $TARGET_DIR/diff_105 2>&1 | tee -a $LOG_FILE
 
 	mkdir $TARGET_DIR/physio >& /dev/null
-	cp $DIR/*.[epr]* $TARGET_DIR/physio 2>&1 | tee -a $LOG_FILE
+	cp $DIR/BHV*/*.[epr]* $TARGET_DIR/physio 2>&1 | tee -a $LOG_FILE
 	
 	
 	#clean up
@@ -198,6 +202,9 @@ do
 		mv $SD/*.puls $SD/${SUBJECT}_${SF}.puls 2> /dev/null
 		mv $SD/*.resp $SD/${SUBJECT}_${SF}.resp 2> /dev/null
 	done
+	
+	# remove empty directories that might have been created
+	find $TARGET_DIR -empty -type d -delete
 	
 	# print report
 	echo "  =================================================" 2>&1 | tee -a $LOG_FILE
