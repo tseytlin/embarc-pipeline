@@ -964,8 +964,8 @@ if __name__ == "__main__":
 		log.info("\n\nREWARD pipeline ...\n\n")
 		t = time.time()		
 		reward = reward(directory,"reward")
-		reward.run()		
-		#reward.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
+		#reward.run()		
+		reward.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
 	
