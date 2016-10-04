@@ -223,7 +223,9 @@ def reward(directory,sequence):
 
 	
 	# now define PPI
-	pppi_rois  = [("Reward_VS",conf.ROI_VS_LR)]	
+	pppi_rois  = [("Reward_VS",conf.ROI_VS_LR),
+			  ("Reward_VLPFC",conf.ROI_leftVLPFC),
+			  ("Reward_BA32",conf.ROI_BA32)]	
 
 	# now do gPPI analysis
 	for roi in pppi_rois:

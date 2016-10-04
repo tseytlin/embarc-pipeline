@@ -68,8 +68,8 @@ class Config:
 
 
 
-		ROI_dir = data_dir+"/OASIS_rois/"
-		ROI_suffix = "_oasis.nii"
+		ROI_dir = data_dir+"/MNI_rois/"
+		ROI_suffix = "_mni.nii"
 		self.FNIRT_config = os.getenv("FSLDIR")+"/etc/flirtsch/T1_2_MNI152_2mm.cnf"
 		self.subject_site=""
 		########################
@@ -79,7 +79,7 @@ class Config:
 		self.ROI_L_insula = ROI_dir+"left_insula"+ROI_suffix
 		self.ROI_R_insula = ROI_dir+"right_insula"+ROI_suffix
 		self.ROI_L_amyg = ROI_dir+"left_amygdala"+ROI_suffix
-		self.ROI_R_amyg = ROI_dir+"left_amygdala"+ROI_suffix
+		self.ROI_R_amyg = ROI_dir+"right_amygdala"+ROI_suffix
 		self.ROI_VS_L = ROI_dir+"left_accumbens_area"+ROI_suffix
 		self.ROI_VS_R = ROI_dir+"right_accumbens_area"+ROI_suffix
 		self.ROI_VS_LR = ROI_dir+"bilateral_accumbens_area"+ROI_suffix
@@ -107,8 +107,8 @@ class Config:
 		self.ROI_caudate_head_L = ROI_dir+"left_caudate"+ROI_suffix
 		self.ROI_caudate_head_R = ROI_dir+"right_caudate"+ROI_suffix
 		self.ROI_amygdala_LR = ROI_dir+"bilateral_amygdala"+ROI_suffix
-		self.ROI_leftVLPFC = ROI_dir+"leftVLPFC_2mm.nii"
-
+		self.ROI_leftVLPFC = ROI_dir+"leftVLPFC_2mm"+ROI_suffix
+		self.ROI_BA32 = ROI_dir+"brodmann_area_32"+ROI_suffix
 
 """
 EMBARC/DIAMOND 2.0 PreProcessing Pipeline
