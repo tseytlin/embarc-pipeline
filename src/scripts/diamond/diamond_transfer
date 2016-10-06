@@ -216,6 +216,8 @@ do
 		mv $SD/*.ext $SD/${SUBJECT}_${SF}.ext 2> /dev/null
 		mv $SD/*.puls $SD/${SUBJECT}_${SF}.puls 2> /dev/null
 		mv $SD/*.resp $SD/${SUBJECT}_${SF}.resp 2> /dev/null
+		mv $SD/*.ext2 $SD/${SUBJECT}_${SF}.ext2 2> /dev/null
+		mv $SD/*.pmu $SD/${SUBJECT}_${SF}.pmu 2> /dev/null
 	done
 	
 	

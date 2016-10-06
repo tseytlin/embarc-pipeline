@@ -101,15 +101,14 @@ do
 	[ $q -eq 0 ] && mv $TARGET_DIR/*dynamicfaces* $TARGET_DIR/dynamic_faces 2>&1 | tee -a $LOG_FILE
 	[ $q -eq 0 ] && cp $DIR/BHV*/Scan/subject*.txt $TARGET_DIR/dynamic_faces 2>&1 | tee -a $LOG_FILE 
 	
-	
-	mkdir $TARGET_DIR/efnback_1 >& /dev/null
 	check_dir $DIR EFNBack_1; q=$?
+	[ $q -eq 0 ] && mkdir $TARGET_DIR/efnback_1 >& /dev/null
 	[ $q -eq 0 ] && mv $TARGET_DIR/*EFNBack1* $TARGET_DIR/efnback_1 2>&1 | tee -a $LOG_FILE
 	[ $q -eq 0 ] && cp $DIR/BHV*/Scan/EFNBACK*-1.edat* $TARGET_DIR/efnback_1 2>&1 | tee -a $LOG_FILE  
 	[ $q -eq 0 ] && cp_conv $DIR/BHV*/Scan/EFNBACK*-1.txt $TARGET_DIR/efnback_1 2>&1 | tee -a $LOG_FILE
 	
-	mkdir $TARGET_DIR/efnback_2 >& /dev/null
 	check_dir $DIR EFNBack_2; q=$?
+	[ $q -eq 0 ] && mkdir $TARGET_DIR/efnback_2 >& /dev/null
 	[ $q -eq 0 ] && mv $TARGET_DIR/*EFNBack2* $TARGET_DIR/efnback_2 2>&1 | tee -a $LOG_FILE
 	[ $q -eq 0 ] && cp $DIR/BHV*/Scan/EFNBACK*-2.edat* $TARGET_DIR/efnback_2 2>&1 | tee -a $LOG_FILE  
 	[ $q -eq 0 ] && cp_conv $DIR/BHV*/Scan/EFNBACK*-2.txt $TARGET_DIR/efnback_2 2>&1 | tee -a $LOG_FILE
@@ -124,7 +123,7 @@ do
 	
 	
 	check_dir $DIR resting; q=$?
-	[ $q -eq 0 ] && mkdir $TARGET_DIR/restingstate >& /dev/null
+	[ $q -eq 0 ] && mkdir $TARGET_DIR/resting_state >& /dev/null
 	[ $q -eq 0 ] && mv $TARGET_DIR/*resting*.nii $TARGET_DIR/resting_state 2>&1 | tee -a $LOG_FILE
 	
 	check_dir $DIR reward_1; q=$?
@@ -133,14 +132,16 @@ do
 	[ $q -eq 0 ] && cp $DIR/BHV*/Scan/*Reward*-1.edat* $TARGET_DIR/reward_1 2>&1 | tee -a $LOG_FILE  
 	[ $q -eq 0 ] && cp_conv $DIR/BHV*/Scan/*Reward*-1.txt $TARGET_DIR/reward_1/ 2>&1 | tee -a $LOG_FILE  
 	
-	mkdir $TARGET_DIR/reward_2 >& /dev/null
+	
 	check_dir $DIR reward_2 ; q=$?
+	[ $q -eq 0 ] && mkdir $TARGET_DIR/reward_2 >& /dev/null
 	[ $q -eq 0 ] && mv $TARGET_DIR/*reward2*.nii $TARGET_DIR/reward_2 2>&1 | tee -a $LOG_FILE
 	[ $q -eq 0 ] && cp $DIR/BHV*/Scan/*Reward*-2.edat* $TARGET_DIR/reward_2 2>&1 | tee -a $LOG_FILE  
 	[ $q -eq 0 ] && cp_conv $DIR/BHV*/Scan/*Reward*-2.txt $TARGET_DIR/reward_2/ 2>&1 | tee -a $LOG_FILE  
 	
-	mkdir $TARGET_DIR/asl >& /dev/null
+	
 	check_dir $DIR ep2d_MBpCASLsat; q=$?
+	[ $q -eq 0 ] && mkdir $TARGET_DIR/asl >& /dev/null
 	[ $q -eq 0 ] && mv $TARGET_DIR/*pCASL* $TARGET_DIR/asl 2>&1 | tee -a $LOG_FILE
 	[ $q -eq 0 ] && cp $DIR/WPC*/*pCASL* $TARGET_DIR/asl 2>&1 | tee -a $LOG_FILE 
 	
@@ -217,7 +218,30 @@ do
 		mv $SD/*.ext $SD/${SUBJECT}_${SF}.ext 2> /dev/null
 		mv $SD/*.puls $SD/${SUBJECT}_${SF}.puls 2> /dev/null
 		mv $SD/*.resp $SD/${SUBJECT}_${SF}.resp 2> /dev/null
+		mv $SD/*.ext2 $SD/${SUBJECT}_${SF}.ext2 2> /dev/null
+		mv $SD/*.pmu $SD/${SUBJECT}_${SF}.pmu 2> /dev/null
 	done
+	
+		
+	# copy Post directory content	
+	mkdir $TARGET_DIR/post
+	cp $DIR/BHV*/Post/emotion*  $TARGET_DIR/post 2>&1 | tee -a $LOG_FILE
+	cp $DIR/BHV*/Post/PostTaskFraming* $TARGET_DIR/post 2>&1 | tee -a $LOG_FILE
+	
+	
+	for EPRIME_FILE in `find $TARGET_DIR -name '*.edat*'`
+	do
+		EPRIME_FILE=${EPRIME_FILE%.*}.txt
+		# convert E-Prime files to UTF-8
+		# check if eprime is utf-16
+		file -i ${EPRIME_FILE} | grep -q utf-16
+		if [ $? -eq 0 ]
+		then
+			mv $EPRIME_FILE tmp.txt 
+			iconv -f utf-16 -t utf-8 tmp.txt > ${EPRIME_FILE}
+		fi
+	done
+	
 	
 	# remove empty directories that might have been created
 	find $TARGET_DIR -empty -type d -delete
