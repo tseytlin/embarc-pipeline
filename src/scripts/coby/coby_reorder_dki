@@ -1,0 +1,144 @@
+#!/bin/sh 
+#@author Eugene Tseytlin (University of Pittsburgh)
+
+
+# do some parameter checking
+PROG=`basename $0` 
+export FSLOUTPUTTYPE=NIFTI
+
+if [ -z $1 ];
+then
+    echo "Usage: ${PROG} <dir1> [dir2] ... [dirN] "
+    echo "Reorder DTI and DKI data in a coby dataset"    
+    exit 1
+fi
+
+# merge bvec files
+function merge_bvec() {
+	DIR=$1
+	SUBJECT=$2
+	SUFFIX=$3
+
+	for N in {1..3}
+	do
+		awk "NR==$N" ${DIR}/diff_35/*${SUFFIX}.bvec | tr -d '\n' > ${DIR}/diff_210/row${N}.txt
+		awk "NR==$N" ${DIR}/diff_70/*${SUFFIX}.bvec | tr -d '\n' >>  ${DIR}/diff_210/row${N}.txt
+		awk "NR==$N" ${DIR}/diff_105/*${SUFFIX}.bvec >>  ${DIR}/diff_210/row${N}.txt
+	done
+	(cd ${DIR}/diff_210; cat row1.txt row2.txt row3.txt |sed 's/  / /g' > ${DIR}/diff_210/coby_${SUBJECT}_diff_210${SUFFIX}.bvec)
+	rm  ${DIR}/diff_210/row*.txt
+}
+
+
+
+
+for DIR in $@
+do
+	# convert to absolute path
+	DIR=$(cd $DIR;pwd)
+	LOG_DIR=$DIR/logs
+	COHORT=$(basename $(dirname $DIR))
+	DIR_NAME=$(basename $DIR)
+	USERNAME=$(basename $DIR| awk -F '.' '{print $2}')
+	DATE=$(basename $DIR|awk -F '[_.]' '{print $2}')
+	
+	
+	# create a log file
+	if [ ! -d $LOG_DIR ];
+	then
+	    mkdir $LOG_DIR
+	fi
+
+	# transfer.subject.N.log
+	# find empty log file
+	i=1
+	LOG_FILE="${LOG_DIR}/reoder.${USERNAME}.${i}.log" 
+	while [ -e $LOG_FILE ] 
+	do
+	   let "i=i+1"
+	   LOG_FILE="${LOG_DIR}/reorder.${USERNAME}.${i}.log" 
+	done
+
+	# write out a pretty header file
+	DT=`date`
+	echo "+------------------------------------------------------------" > $LOG_FILE 2>&1
+	echo "|  Script:      ${PROG} " >> $LOG_FILE 2>&1
+	echo "|  Description: validate, unpack, convert and copy fMRI data" >> $LOG_FILE 2>&1
+	echo "|  Start:       ${DT} " >> $LOG_FILE 2>&1
+	echo "|  Argument:    ${DIR} " >> $LOG_FILE 2>&1
+	echo "|  Subject:     ${USERNAME} " >> $LOG_FILE 2>&1
+	echo "|  Cohort: 	  ${COHORT} " >> $LOG_FILE 2>&1
+	echo "+------------------------------------------------------------" >> $LOG_FILE 2>&1
+	echo " " >> $LOG_FILE 2>&1
+
+	echo "processing $USERNAME .." 2>&1 | tee -a $LOG_FILE
+
+	# re-oder DTI
+	ls $DIR/dti_68/*.nii &> /dev/null
+	if [ $? -eq 0 ]; then
+		
+		mkdir $DIR/dti_68/reordered &> /dev/null
+		FL=($DIR/dti_68/*.nii)
+		for F in ${FL[@]}
+		do 
+			SUBJ=$(basename $F .nii)	
+			echo "  reordering $SUBJ .." 2>&1 | tee -a $LOG_FILE		
+			reorder_dki.sh $DIR/dti_68/ $DIR/dti_68/reordered $SUBJ 2>&1 | tee -a $LOG_FILE
+		done
+	else
+		echo "Warning: dti_68 sequence seems to be missing " 2>&1 | tee -a $LOG_FILE
+	fi
+
+
+	# re-odrder DKI
+	ls $DIR/diff_35/*.nii $DIR/diff_70/*.nii $DIR/diff_105/*.nii &> /dev/null
+	if [ $? -eq 0 ]; then
+		# lets merge the datasets 		
+		mkdir $DIR/diff_210 &> /dev/null		
+		mkdir $DIR/diff_210/reordered &> /dev/null		
+		
+		# check if we have AP/PA vs plain
+		ls $DIR/diff_35/*AP.nii &> /dev/null
+		if [ $? -eq 0 ]; then
+			# merge nifti files
+			echo "  merging diff_210_AP .nii .." 2>&1 | tee -a $LOG_FILE
+			fslmerge -t ${DIR}/diff_210/coby_${USERNAME}_diff_210_AP.nii  ${DIR}/diff_35/*AP.nii ${DIR}/diff_70/*AP.nii ${DIR}/diff_105/*AP.nii  2>&1 | tee -a $LOG_FILE
+			echo "  merging diff_210_PA .nii.." 2>&1 | tee -a $LOG_FILE
+			fslmerge -t ${DIR}/diff_210/coby_${USERNAME}_diff_210_PA.nii  ${DIR}/diff_35/*PA.nii ${DIR}/diff_70/*PA.nii ${DIR}/diff_105/*PA.nii  2>&1 | tee -a $LOG_FILE
+
+			# merge bval files
+			echo "  merging diff_210_AP/PA .bval.." 2>&1 | tee -a $LOG_FILE
+			cat ${DIR}/diff_35/*AP.bval ${DIR}/diff_70/*AP.bval ${DIR}/diff_105/*AP.bval |  tr -d '\n'| sed 's/  / /g'  > ${DIR}/diff_210/coby_${USERNAME}_diff_210_AP.bval
+			cat ${DIR}/diff_35/*PA.bval ${DIR}/diff_70/*PA.bval ${DIR}/diff_105/*PA.bval |  tr -d '\n'| sed 's/  / /g'  > ${DIR}/diff_210/coby_${USERNAME}_diff_210_PA.bval
+			
+			# merge bvec files
+			echo "  merging diff_210_AP/PA .bvec .." 2>&1 | tee -a $LOG_FILE
+			merge_bvec $DIR $USERNAME '_AP'
+			merge_bvec $DIR $USERNAME '_PA'
+
+		else
+			# merge nifti files
+			echo "  merging diff_210 .nii .." 2>&1 | tee -a $LOG_FILE
+			fslmerge -t ${DIR}/diff_210/coby_${USERNAME}_diff_210.nii  ${DIR}/diff_35/*.nii ${DIR}/diff_70/*.nii ${DIR}/diff_105/*.nii  2>&1 | tee -a $LOG_FILE
+			echo "  merging diff_210 .bval .." 2>&1 | tee -a $LOG_FILE
+			# merge bval files
+			cat ${DIR}/diff_35/*.bval ${DIR}/diff_70/*.bval ${DIR}/diff_105/*.bval |  tr -d '\n'| sed 's/  / /g'  > ${DIR}/diff_210/coby_${USERNAME}_diff_210.bval
+			echo "  merging diff_210 .bvec .." 2>&1 | tee -a $LOG_FILE
+			# merge bvec files
+			merge_bvec $DIR $USERNAME ''
+		fi
+
+
+		# now lets reorder the set
+		FL=($DIR/diff_210/*.nii)
+		for F in ${FL[@]}
+		do 
+			SUBJ=$(basename $F .nii)
+			echo "  reordering $SUBJ .." 2>&1 | tee -a $LOG_FILE			
+			reorder_dki.sh $DIR/diff_210/ $DIR/diff_210/reordered $SUBJ 2>&1 | tee -a $LOG_FILE
+		done
+	else
+		echo "Warning: diff_35/70/105 sequences seem to be missing " 2>&1 | tee -a $LOG_FILE
+	fi
+
+done
