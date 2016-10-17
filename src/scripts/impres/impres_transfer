@@ -120,7 +120,7 @@ do
 	
 
 	mkdir $TARGET_DIR/physio >& /dev/null
-	cp $DIR/BHV*/*.* $TARGET_DIR/physio 2>&1 | tee -a $LOG_FILE
+	cp $DIR/BHV*/wpc*.* $TARGET_DIR/physio 2>&1 | tee -a $LOG_FILE
 
 	#clean up
 	#rm $TARGET_DIR/*.nii 2>&1 | tee -a $LOG_FILE
@@ -129,7 +129,7 @@ do
 	for SD in $TARGET_DIR/*
 	do
 		SF=$(basename $SD)
-		SUBJECT="impress_$USERNAME"
+		SUBJECT="impres_$USERNAME"
 		FL=(`ls -t $SD/*.nii 2> /dev/null`)
 		AP=1
 		if [ "${#FL[@]}" -eq 2 ]  && [[ ${FL[0]} == *"fieldmap"* ]]; then
@@ -186,9 +186,8 @@ do
 	
 		
 	# copy Post directory content	
-	#mkdir $TARGET_DIR/post
-	#cp $DIR/BHV*/Post/emotion*  $TARGET_DIR/post 2>&1 | tee -a $LOG_FILE
-	#cp $DIR/BHV*/Post/PostTaskFraming* $TARGET_DIR/post 2>&1 | tee -a $LOG_FILE
+	mkdir $TARGET_DIR/post
+	cp $DIR/BHV*/PostTaskFraming* $TARGET_DIR/post 2>&1 | tee -a $LOG_FILE
 	
 	
 	for EPRIME_FILE in `find $TARGET_DIR -name '*.edat*'`
