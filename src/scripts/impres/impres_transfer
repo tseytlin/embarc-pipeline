@@ -188,6 +188,7 @@ do
 	# copy Post directory content	
 	mkdir $TARGET_DIR/post
 	cp $DIR/BHV*/PostTaskFraming* $TARGET_DIR/post 2>&1 | tee -a $LOG_FILE
+	cp $DIR/BHV*/Switching* $TARGET_DIR/post 2>&1 | tee -a $LOG_FILE
 	
 	
 	for EPRIME_FILE in `find $TARGET_DIR -name '*.edat*'`
