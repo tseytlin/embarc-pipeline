@@ -134,12 +134,18 @@ do
 	echo "" 2>&1 | tee -a $LOG_FILE
 
 	# create overal PDF and CSV at the subject directory
-	echo "collecting results in CSV .." 2>&1 | tee -a $LOG_FILE
-	(cat $DATA_DIR/output/*/csv/*.csv > $DATA_DIR/${USERNAME}_results.csv) 2>&1 | tee -a $LOG_FILE
+	ls $DATA_DIR/output/*/csv/*.csv >& /dev/null
+	if [ $? -eq 0 ]; then	
+		echo "collecting results in CSV .." 2>&1 | tee -a $LOG_FILE
+		(cat $DATA_DIR/output/*/csv/*.csv > $DATA_DIR/${USERNAME}_results.csv) 2>&1 | tee -a $LOG_FILE
+	fi
 
 	# concatanate all PS files as 1 PDF
-	echo "compiling analysis PDF .." 2>&1 | tee -a $LOG_FILE
-	(cd $DATA_DIR; psmerge -ot.ps output/*/ps/*.ps; ps2pdf t.ps ${USERNAME}_analysis.pdf; rm t.ps)  2>&1 | tee -a $LOG_FILE
+	ls $DATA_DIR/output/*/ps/*.ps >& /dev/null
+	if [ $? -eq 0 ]; then	
+		echo "compiling analysis PDF .." 2>&1 | tee -a $LOG_FILE
+		(cd $DATA_DIR; psmerge -ot.ps output/*/ps/*.ps; ps2pdf t.ps ${USERNAME}_analysis.pdf; rm t.ps)  2>&1 | tee -a $LOG_FILE
+	fi
 
 	# create logs directory if not there
 	if [ ! -e ${DATA_DIR}/logs ];
