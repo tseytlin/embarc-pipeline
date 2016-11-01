@@ -196,7 +196,7 @@ def reward(directory,sequence):
 	task.connect(ds2,'behav',dm2,"eprime_file")	
 
 	task.connect([(pp1,cc1,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
-	task.connect([(pp1,cc2,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
+	task.connect([(pp2,cc2,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
 	task.connect(cc1,"regressors",merge_move,"in1")	
 	task.connect(cc2,"regressors",merge_move,"in2")
 
@@ -350,7 +350,7 @@ def efnback(directory,sequence):
 		task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct')])])
 
 	task.connect([(pp1,cc1,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
-	task.connect([(pp1,cc2,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
+	task.connect([(pp2,cc2,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
 	task.connect(cc1,"regressors",merge_move,"in1")	
 	task.connect(cc2,"regressors",merge_move,"in2")	
 
