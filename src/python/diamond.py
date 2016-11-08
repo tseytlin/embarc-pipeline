@@ -367,6 +367,7 @@ def efnback(directory,sequence):
 	task.connect(merge_func,'out',l1,'input.func')
 	task.connect(merge_nDM,'out',l1,"input.design_matrix")
 	
+	
 	# define datasink
 	datasink = pe.Node(nio.DataSink(), name='datasink')
 	datasink.inputs.base_directory = out_dir
@@ -376,6 +377,30 @@ def efnback(directory,sequence):
 	gold.save_files(task,merge_move,datasink,[("out","movement")], not noPrint)
 	gold.save_files(task,l1.get_node('input'),datasink,["func"], not noPrint)	
 	gold.save_files(task,l1.get_node('output'),datasink,["spm_mat_file","con_images"], not noPrint)	
+
+
+	# now define PPI
+	ppi_contrasts = []	
+	ppi_contrasts.append(("2back emotion-2back noface","T",["PPI_twofear","PPI_twohappy","PPI_twoblank"],[.5,.5,-1]))
+	pppi_rois  = 	[("bilateral_amygdala",conf.ROI_amygdala_LR)]	
+
+
+	# now do gPPI analysis
+	for roi in pppi_rois:
+		pppi = pe.Node(interface=wrap.PPPI(), name="pppi_"+roi[0])
+		pppi.inputs.voi_name = roi[0]
+		pppi.inputs.voi_file = roi[1]
+		pppi.inputs.subject = subject
+		task.connect(l1,'output.spm_mat_file',pppi,'spm_mat_file')
+		
+		contrast = pe.Node(interface = spm.EstimateContrast(), name="contrast"+roi[0])
+		contrast.inputs.contrasts = ppi_contrasts
+		task.connect(pppi,'spm_mat_file',contrast,'spm_mat_file')
+		task.connect(pppi,'beta_images',contrast,'beta_images')
+		task.connect(pppi,'residual_image',contrast,'residual_image')
+		task.connect(contrast,'con_images',datasink,"data.pppi_"+roi[0]+"_con_images")
+		task.connect(pppi,"spm_mat_file",datasink,"data.ppi_"+roi[0]+"_spm_file")	
+
 
 	
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
