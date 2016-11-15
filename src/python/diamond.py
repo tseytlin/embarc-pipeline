@@ -7,7 +7,10 @@ import os
 import re
 import gold
 
-## Predefined constants ##
+## Predefined constants
+# defaults are defined in gold.py
+# you need to redefine constants either here
+# or in each sequence
 conf = gold.Config()
 
 # default value to use fieldmap in the pipeline
@@ -16,7 +19,15 @@ noPrint = False
 
 
 """
-EMBARC 1.0 Input Data Source
+DIAMOND 1.0 Input Data Source
+
+datasource is the module that uses wildcards to pull
+struct		- anatomical NIFTI file
+func 		- functional NIFIT file
+behav		- behaviour file that can be either an EPRIME text file or something else
+fieldmap_mag	- fieldmap magnitute NIFTI file
+fieldmap_phase	- fieldmap phase NIFTI file
+
 """
 def datasource(directory, sequence):
 	import nipype.pipeline.engine as pe          # pypeline engine
@@ -35,6 +46,8 @@ def datasource(directory, sequence):
 
 	outfields=['func', 'struct']
 
+	# ignore this section as it deals with original non-structured naming convention
+	# for early diamond subjects
 	if orig:
 		# define templates for datasource
 		field_template = dict(func=sequence+"/*.img",struct="anat/T1MPRAGE*[0-9].nii")
@@ -53,11 +66,10 @@ def datasource(directory, sequence):
 			template_args['behav']  = [[]]
 	else:
 
-		# define templates for datasource
+		# define templates for datasource for functional and structural images
 		field_template = dict(func=sequence+"/*"+sequence+".img",struct="anat/*_anat_crop.nii")
 		template_args  = dict(func=[[]],struct=[[]])                
 
-		
 
 		# add behavior file to task oriented design
 		if sequence.startswith('reward') or sequence.startswith('efnback') or sequence.startswith('dynamic_faces'):
@@ -65,12 +77,13 @@ def datasource(directory, sequence):
 			template_args['behav']  = [[]]
 			outfields.append('behav')
 
+		# if ASL then fetch functional reference file
 		if sequence.startswith('asl'):
 			field_template['func_ref'] = sequence+"/*"+sequence+"_ref.img"
 			template_args['func_ref']  = [[]]
 			outfields.append('func_ref')
 
-
+		# if fieldmaps are being used, then define them
 		if useFieldmap:
 			field_template['fieldmap_mag']   = "field_map/*_mag.nii"
 			field_template['fieldmap_phase'] ="field_map/*_phase.nii"
@@ -97,19 +110,22 @@ def datasource(directory, sequence):
 
 
 """
-EMBARC get subject name from a directory
+get subject name from a directory
 """
 def get_subject(directory):
 	m = re.search('diamond_[0-9]+.([0-9]+)',directory)
 	if m:
 		return m.group(1)
 	return "subject"
-
+"""
+get a subset of a list, internal function used within pipeline
+"""
 def subset(x,i):
 	return x[i]	
 
 """
-EMBARC 2.0 Reward sequence
+DIAMOND 2.0 Reward sequence
+
 """
 def reward(directory,sequence):
 	import nipype.pipeline.engine as pe          # pypeline engine
@@ -120,8 +136,10 @@ def reward(directory,sequence):
 	import nipype.interfaces.utility as util     # utility
 	import nipype.interfaces.io as nio           # Data i/o
 	import gold	
-
+	
+	# define subject name
 	subject = get_subject(directory)
+	
 	# define base directory
 	base_dir = os.path.abspath(directory+"/analysis/")
 	if not os.path.exists(base_dir):
@@ -130,37 +148,43 @@ def reward(directory,sequence):
 	if not os.path.exists(out_dir):
 		os.makedirs(out_dir)
 
+	# this is where you need to reset study specific settings
 	conf.modelspec_high_pass_filter_cutoff = 60	
 	conf.level1design_bases = {'hrf':{'derivs': [0,0]}}
 
-	# some hard-coded sequence specific components
+	# define contrasts for 1st level
 	contrasts = []
 	contrasts.append(('RewardExpectancy','T', ['anticipationxreward_expectancy^1*bf(1)'],[1]))
 	contrasts.append(('UncertainExpectancy','T', ['anticipationxuncertainty^1*bf(1)'],[1]))
 	contrasts.append(('PredictionError','T', ['outcomexprediction_error^1*bf(1)'],[1]))
 
+	# define contrasts for PPPI
 	ppi_contrasts = []
 	ppi_contrasts.append(('RewardExpectancy','T', ['PPI_anticipationxreward_expectancy^1'],[1]))
 	ppi_contrasts.append(('PredictionError','T', ['PPI_outcomexprediction_error^1'],[1]))
 
-	# get components
+	# get data input nodes from two runs
 	ds1 = datasource(directory,sequence+"_1")
 	ds2 = datasource(directory,sequence+"_2")
 	
+	# get preprocess pipelines for each run
 	pp1 = gold.preprocess2(conf,useFieldmap,"preprocess_1")
 	pp2 = gold.preprocess2(conf,useFieldmap,"preprocess_2")
 		
+	# define a first level analysis pipeline
 	l1 = gold.level1analysis(conf);
 	l1.inputs.input.contrasts = contrasts
 
+	# define a first level for PPPI
 	l2 = gold.level1analysis(conf,0,"level1_pppi");
 	l2.inputs.input.contrasts = contrasts
 
-	# create DesignMatrix
+	# create DesignMatrix for run1
 	dm1 = pe.Node(name="create_DM1",interface=Function(input_names=["matlab_function","eprime_file"],
 					output_names=["design_matrix"],function=gold.create_design_matrix))
 	dm1.inputs.matlab_function = "reward_eprime2dm"
-
+	
+	# create DesignMatrix for run2
 	dm2 = pe.Node(name="create_DM2",interface=Function(input_names=["matlab_function","eprime_file"],
 					output_names=["design_matrix"],function=gold.create_design_matrix))
 	dm2.inputs.matlab_function = "reward_eprime2dm"
@@ -169,21 +193,24 @@ def reward(directory,sequence):
 	merge_func = pe.Node(name="merge_func",interface=util.Merge(2))
 	merge_nDM = pe.Node(name="merge_nDM",interface=util.Merge(2))
 	merge_move = pe.Node(name="merge_movement",interface=util.Merge(2))
+	merge_regressors = pe.Node(name="merge_regressors",interface=util.Merge(2))
 	
-	# mCompCor
+	# mCompCor for first run
 	cc1 = pe.Node(interface=wrap.mCompCor(), name="mCompCor1")
 	cc1.inputs.white_mask = conf.ROI_white
-	# mCompCor
+
+	# mCompCor for second run
 	cc2 = pe.Node(interface=wrap.mCompCor(), name="mCompCor2")
 	cc2.inputs.white_mask = conf.ROI_white
 	
 		
-	
-	
-		
+	# now we are building a pipeline of nodes
 	# connect components into a pipeline
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
+	
+	# connect data from datasource to preprocessing pipeline for each run
+	# with fieldmap and without
 	if useFieldmap:	
 		task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct'),
 			('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
@@ -192,54 +219,68 @@ def reward(directory,sequence):
 	else:
 		task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct')])])
 		task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct')])])
+	
+	# connect behavour file from datasource to design matrix creator	
 	task.connect(ds1,'behav',dm1,"eprime_file")	
 	task.connect(ds2,'behav',dm2,"eprime_file")	
 
+	# connect output of preprocessing for each run to mCompCor to define regressors
 	task.connect([(pp1,cc1,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
 	task.connect([(pp2,cc2,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
-	task.connect(cc1,"regressors",merge_move,"in1")	
-	task.connect(cc2,"regressors",merge_move,"in2")
+	
+	# merge regressors from mCompCore
+	task.connect(cc1,"regressors",merge_regressors,"in1")	
+	task.connect(cc2,"regressors",merge_regressors,"in2")
 
-
+	# merge movement files from preprocessing
+	task.connect(pp1,'output.movement',merge_move,"in1")	
+	task.connect(pp2,'output.movement',merge_move,"in2")
+	
+	# merge functional files from preprocessing
 	task.connect(pp1,'output.func',merge_func,'in1')
 	task.connect(pp2,'output.func',merge_func,'in2')
-	#task.connect(pp1,'output.movement',merge_move,'in1')
-	#task.connect(pp2,'output.movement',merge_move,'in2')
+	
+	# merge design matrix files
 	task.connect(dm1,'design_matrix',merge_nDM,'in1')
 	task.connect(dm2,'design_matrix',merge_nDM,'in2')
 
-
-	task.connect(merge_move,"out",l1,"input.movement")	
+	# setup first level model 
+	task.connect(merge_regressors,"out",l1,"input.movement")	
 	task.connect(merge_func,'out',l1,'input.func')
 	task.connect(merge_nDM,'out',l1,"input.design_matrix")
 	
-	task.connect(merge_move,"out",l2,"input.movement")	
+	# setup second level model for PPPI
+	task.connect(merge_regressors,"out",l2,"input.movement")	
 	task.connect(merge_func,'out',l2,'input.func')
 	task.connect(merge_nDM,'out',l2,"input.design_matrix")
 
-	# define datasink
+	# define datasink (this is where output files go)
 	datasink = pe.Node(nio.DataSink(), name='datasink')
 	datasink.inputs.base_directory = out_dir
 
 	
-	# now define PPI
+	# now define PPI ROIS
 	pppi_rois  = [("Reward_VS",conf.ROI_VS_LR),
 			  ("Reward_VLPFC",conf.ROI_leftVLPFC),
 			  ("Reward_BA32",conf.ROI_BA32)]	
 
 	# now do gPPI analysis
 	for roi in pppi_rois:
+		# setup PPPI node for a given ROI
 		pppi = pe.Node(interface=wrap.PPPI(), name="pppi_"+roi[0])
 		pppi.inputs.voi_name = roi[0]
 		pppi.inputs.voi_file = roi[1]
 		pppi.inputs.subject = subject
 		task.connect(l2,'output.spm_mat_file',pppi,'spm_mat_file')
 		
+		# run estimate contrast on PPI results
 		contrast = pe.Node(interface = spm.EstimateContrast(), name="contrast"+roi[0])
 		contrast.inputs.contrasts = ppi_contrasts
 		task.connect(pppi,'spm_mat_file',contrast,'spm_mat_file')
 		task.connect(pppi,'beta_images',contrast,'beta_images')
 		task.connect(pppi,'residual_image',contrast,'residual_image')
+		
+		# deposit con images to datasing
 		task.connect(contrast,'con_images',datasink,"data.pppi_"+roi[0]+"_con_images")
 		task.connect(pppi,"spm_mat_file",datasink,"data.ppi_"+roi[0]+"_spm_file")
 	
@@ -250,12 +291,12 @@ def reward(directory,sequence):
 	gold.save_files(task,l1.get_node('input'),datasink,["func"], not noPrint)	
 	gold.save_files(task,l1.get_node('output'),datasink,["spm_mat_file","con_images"], not noPrint)
 
-
+	# create a pretty graphics
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
 	return task
 
 """
-EMBARC 2.0 EFNBACK sequence
+DIAMOND 2.0 EFNBACK sequence
 """
 def efnback(directory,sequence):
 	import nipype.pipeline.engine as pe          # pypeline engine
@@ -267,10 +308,12 @@ def efnback(directory,sequence):
 	import nipype.interfaces.io as nio           # Data i/o
 	import gold
 
+	# redefine some of the parameters
 	conf.modelspec_high_pass_filter_cutoff = 128
 	conf.level1design_bases = {'hrf':{'derivs': [0,0]}}
 
 	subject = get_subject(directory)
+
 	# define base directory
 	base_dir = os.path.abspath(directory+"/analysis/")
 	if not os.path.exists(base_dir):
@@ -300,18 +343,15 @@ def efnback(directory,sequence):
 	contrasts.append(("2back emotion-2back neutral","T",["twofear*bf(1)","twohappy*bf(1)","twoneutral*bf(1)"],[.5,.5,-1]))
 	contrasts.append(("0back emotion-0back neutral","T",["zerofear*bf(1)","zerohappy*bf(1)","zeroneutral*bf(1)"],[.5,.5,-1]))	
 	
-
-		
-
-
-	# get components
+	# get input data
 	ds1 = datasource(directory,sequence+"_1")
 	ds2 = datasource(directory,sequence+"_2")
 	
+	# run preprocess pipeline for both runs
 	pp1 = gold.preprocess2(conf,useFieldmap,"preprocess_1")
 	pp2 = gold.preprocess2(conf,useFieldmap,"preprocess_2")
 	
-	
+	# define first level pipeline
 	l1 = gold.level1analysis(conf);
 	l1.inputs.input.contrasts = contrasts
 	
@@ -328,18 +368,21 @@ def efnback(directory,sequence):
 	merge_func = pe.Node(name="merge_func",interface=util.Merge(2))
 	merge_nDM = pe.Node(name="merge_nDM",interface=util.Merge(2))
 	merge_move = pe.Node(name="merge_movement",interface=util.Merge(2))
+	merge_regressors = pe.Node(name="merge_regressors",interface=util.Merge(2))
 	
-	# mCompCor
+	# mCompCor for run 1
 	cc1 = pe.Node(interface=wrap.mCompCor(), name="mCompCor1")
 	cc1.inputs.white_mask = conf.ROI_white
-	# mCompCor
+
+	# mCompCor for run 2
 	cc2 = pe.Node(interface=wrap.mCompCor(), name="mCompCor2")
 	cc2.inputs.white_mask = conf.ROI_white
 	
-		
 	# connect components into a pipeline
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
+	
+	# setup the preprocessing with fieldmap and without
 	if useFieldmap:	
 		task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct'),
 			('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
@@ -349,21 +392,26 @@ def efnback(directory,sequence):
 		task.connect([(ds1,pp1,[('func','input.func'),('struct','input.struct')])])
 		task.connect([(ds2,pp2,[('func','input.func'),('struct','input.struct')])])
 
+	# pipe results of preprocessing into CompCore
 	task.connect([(pp1,cc1,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
 	task.connect([(pp2,cc2,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
-	task.connect(cc1,"regressors",merge_move,"in1")	
-	task.connect(cc2,"regressors",merge_move,"in2")	
+	
+	# merge regressors
+	task.connect(cc1,"regressors",merge_regressors,"in1")	
+	task.connect(cc2,"regressors",merge_regressors,"in2")	
 
+	# merge results of both runs into one
 	task.connect(ds1,'behav',dm1,"eprime_file")	
 	task.connect(ds2,'behav',dm2,"eprime_file")	
 	task.connect(pp1,'output.func',merge_func,'in1')
 	task.connect(pp2,'output.func',merge_func,'in2')
-	#task.connect(pp1,'output.movement',merge_move,'in1')
-	#task.connect(pp2,'output.movement',merge_move,'in2')
+	task.connect(pp1,'output.movement',merge_move,'in1')
+	task.connect(pp2,'output.movement',merge_move,'in2')
 	task.connect(dm1,'design_matrix',merge_nDM,'in1')
 	task.connect(dm2,'design_matrix',merge_nDM,'in2')
 
-	task.connect(merge_move,"out",l1,"input.movement")	
+	# setup first level
+	task.connect(merge_regressors,"out",l1,"input.movement")	
 	task.connect(merge_func,'out',l1,'input.func')
 	task.connect(merge_nDM,'out',l1,"input.design_matrix")
 	
@@ -387,23 +435,27 @@ def efnback(directory,sequence):
 
 	# now do gPPI analysis
 	for roi in pppi_rois:
+		# define PPI for each ROI
 		pppi = pe.Node(interface=wrap.PPPI(), name="pppi_"+roi[0])
 		pppi.inputs.voi_name = roi[0]
 		pppi.inputs.voi_file = roi[1]
 		pppi.inputs.subject = subject
 		task.connect(l1,'output.spm_mat_file',pppi,'spm_mat_file')
 		
+		# run estimate contrast for each ROI
 		contrast = pe.Node(interface = spm.EstimateContrast(), name="contrast"+roi[0])
 		contrast.inputs.contrasts = ppi_contrasts
 		task.connect(pppi,'spm_mat_file',contrast,'spm_mat_file')
 		task.connect(pppi,'beta_images',contrast,'beta_images')
 		task.connect(pppi,'residual_image',contrast,'residual_image')
+		
+		# extract con images to datasing
 		task.connect(contrast,'con_images',datasink,"data.pppi_"+roi[0]+"_con_images")
 		task.connect(pppi,"spm_mat_file",datasink,"data.ppi_"+roi[0]+"_spm_file")	
 
-
-	
+	# generate a pretty pipeline graphics	
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
+
 	return task
 
 """
@@ -419,10 +471,13 @@ def dynamic_faces(directory,sequence):
 	import nipype.interfaces.io as nio           # Data i/o
 	import gold
 	
+	# predefine hard-coded parameters
 	conf.modelspec_high_pass_filter_cutoff = 256
 	conf.level1design_bases = {'hrf':{'derivs': [1,0]}} #TODO check
 
 	subject = get_subject(directory)
+
+
 	# define base directory
 	base_dir = os.path.abspath(directory+"/analysis/")
 	if not os.path.exists(base_dir):
@@ -451,9 +506,13 @@ def dynamic_faces(directory,sequence):
 	contrasts.append(("Happy > Shape","T",["Happy*bf(1)","Shape*bf(1)"],[1,-1]))
 	contrasts.append(("Emotion > Shape","T",["Anger*bf(1)","Fear*bf(1)","Sad*bf(1)","Happy*bf(1)","Shape*bf(1)"],[.25,.25,.25,.25,-1]))
 
-	# get components
+	# get datasoruce
 	ds = datasource(directory,sequence)	
+
+	# get preprocess2 pipeline
 	pp = gold.preprocess2(conf,useFieldmap)
+
+	# get first level analysis
 	l1 = gold.level1analysis(conf);
 	l1.inputs.input.contrasts = contrasts
 	
@@ -469,13 +528,18 @@ def dynamic_faces(directory,sequence):
 	# connect components into a pipeline
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
+	
+	# setup the preprocessing with fieldmap and without
 	if useFieldmap:	
 		task.connect([(ds,pp,[('func','input.func'),('struct','input.struct'),
 			('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
 	else:
 		task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])	
 
+	# run compCore with results of preprocessing
 	task.connect([(pp,cc,[('output.ufunc','source'),('output.mask','brain_mask'),('output.movement','movement')])])
+
+	# run first level
 	task.connect(cc,"regressors",l1,"input.movement")	
 	task.connect(pp,'output.func',l1,'input.func')
 	task.connect(ds,'behav',dm,"eprime_file")	
@@ -514,17 +578,21 @@ def dynamic_faces(directory,sequence):
 
 	# now do gPPI analysis
 	for roi in pppi_rois:
+		# define PPPI for each ROI
 		pppi = pe.Node(interface=wrap.PPPI(), name="pppi_"+roi[0])
 		pppi.inputs.voi_name = roi[0]
 		pppi.inputs.voi_file = roi[1]
 		pppi.inputs.subject = subject
 		task.connect(l1,'output.spm_mat_file',pppi,'spm_mat_file')
 		
+		# estimate contrast for each ROI
 		contrast = pe.Node(interface = spm.EstimateContrast(), name="contrast"+roi[0])
 		contrast.inputs.contrasts = ppi_contrasts
 		task.connect(pppi,'spm_mat_file',contrast,'spm_mat_file')
 		task.connect(pppi,'beta_images',contrast,'beta_images')
 		task.connect(pppi,'residual_image',contrast,'residual_image')
+		
+		# output con images to datasink
 		task.connect(contrast,'con_images',datasink,"data.pppi_"+roi[0]+"_con_images")
 		task.connect(pppi,"spm_mat_file",datasink,"data.ppi_"+roi[0]+"_spm_file")
 	
@@ -538,7 +606,7 @@ def dynamic_faces(directory,sequence):
 
 
 """
-EMBARC 1.0 Resting Sequence Ex: resting1/resting2
+DIAMOND 1.0 Resting Sequence Ex: resting1/resting2
 directory - dataset directory
 sequence  - name of the sequence
 subject   - optional subject name if None, embarc subject will be derived
@@ -563,41 +631,53 @@ def resting(directory,sequence):
 	out_dir = os.path.abspath(directory+"/output/"+sequence)
 	if not os.path.exists(out_dir):
 		os.makedirs(out_dir)
+	
+	# get subjects
 	subject = get_subject(directory)
 	
+	# hard-coded custom parameters
 	conf.modelspec_high_pass_filter_cutoff = 256
 	
-	# setup some constants
+	# define resting ROI names
 	resting_roi_names = ['LeftInsula','RightInsula','LeftAmygdala',
 			     'RightAmygdala','LeftVS','RightVS','LeftBA9','RightBA9',
 			     'BR1','BR2','BR3','BR4','BR9', 'leftVLPFC']
+
+	# define resting ROI filname locations
 	resting_roi_images = [conf.ROI_L_insula,conf.ROI_R_insula,conf.ROI_L_amyg,conf.ROI_R_amyg,
 			conf.ROI_VS_L,conf.ROI_VS_R,conf.ROI_BA9_L,conf.ROI_BA9_R,
 			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9, conf.ROI_leftVLPFC]
 	
+	# get dataource an preprocess workflows
 	ds = datasource(directory,sequence)
 	pp = gold.preprocess2(conf,useFieldmap)
 	
+	# define nuisance node
 	nu = pe.Node(interface=wrap.Nuisance(), name="nuisance")
 	nu.inputs.white_mask = conf.ROI_white
 	nu.inputs.time_repetition = conf.time_repetition
 
+	# defin a node to only selects certain columns 
 	column_select = pe.Node(interface=wrap.ColumnSelect(),name="column_select")
 	column_select.inputs.selection = "18,24"
 	column_select.inputs.complement = True
-
-
+	
+	# define GLM node
 	glm = pe.Node(interface=fsl.GLM(), name="glm")
 	glm.inputs.out_res_name = "residual.4d.nii"
 	
+	# define GLM for running without global signal
 	glm_NGS = pe.Node(interface=fsl.GLM(), name="glm_NGS")
 	glm_NGS.inputs.out_res_name = "residual.4d.nii"
 
+	# filter an image
 	filt = pe.Node(interface=fsl.ImageMaths(), name="filter")
 	#filt.inputs.op_string = ' -bptf 128 12.5 '
 	filt.inputs.op_string = ' -bptf 37 4.167' #TODO hard coded filters, but dependent on TR
 	filt.inputs.terminal_output = 'none'
 	
+
+	# define ALFF workflows for a set of ...
 	alff = dict()
 	alff_nm = []
 	for hl in [[0.01,0.1],[0.0,0.04],[0.04,0.08],[0.08,0.12],[0.12,0.16],[0.16,0.20],[0.20,0.24]]: 
@@ -607,9 +687,11 @@ def resting(directory,sequence):
 		alff[nm].inputs.hp_input.hp = hl[0]
 		alff[nm].inputs.lp_input.lp = hl[1]
 	
+	# define REHO workflow
 	reho = CPAC.reho.create_reho()
 	reho.inputs.inputspec.cluster_size = 27
 	
+	# define network centrality workflow
 	nc = CPAC.network_centrality.create_resting_state_graphs(wf_name='network_centrality')
 	nc.inputs.inputspec.method_option=0
 	nc.inputs.inputspec.weight_options=[True, True]	
@@ -622,6 +704,7 @@ def resting(directory,sequence):
 	maskave = dict()
 	gunzip = dict()
 	
+	# run SCA over a set of ROIs
 	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]:
 		sca[mask] = CPAC.sca.create_sca(name_sca="sca_"+mask);
 		maskave[mask] = pe.Node(interface=afni.Maskave(),name="roi_ave_"+mask)
@@ -630,60 +713,68 @@ def resting(directory,sequence):
 		maskave[mask].inputs.mask = resting_roi_images[resting_roi_names.index(mask)]
 		gunzip[mask] = pe.Node(interface=misc.Gunzip(),name="gunzip_"+mask)
 	
+	# define ROI averages
 	roiave = pe.MapNode(interface=afni.Maskave(),name="roi_ave",iterfield="mask")
 	roiave.inputs.outputtype = "NIFTI"
 	roiave.inputs.mask = resting_roi_images
 	roiave.inputs.quiet= True
 
+	# define ROI correlation 
 	corroi = pe.Node(interface=wrap.CorrelateROIs(),name="corr_roi")
 	corroi.inputs.roi_names = resting_roi_names
 	corroi.inputs.task_name = "Resting_State"
 	corroi.inputs.out_file = subject+"_"+sequence+"_outcomes_CORR.csv"
 
-	
+	# define datasing
 	datasink = pe.Node(nio.DataSink(), name='datasink')
 	datasink.inputs.base_directory = out_dir
 	
-
+	# start the workflow
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
 	
+	# feed input into preprocessing with fieldmap and without
 	if useFieldmap:	
 		task.connect([(ds,pp,[('func','input.func'),('struct','input.struct'),
 			('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
 	else:
 		task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])	
+
+	# feed the output of preprocessing into nuisance
 	task.connect([(pp,nu,[('output.ufunc','source'),
 				 ('output.mask','brain_mask'),
 				 ('output.movement','movement')])])
 	
-
-
+	# run GLM with all regressors from nuisance and filter its output
 	task.connect(nu,"regressors",glm,"design")
 	task.connect(pp,"output.func",glm,"in_file")
 	task.connect(glm,"out_res",filt,"in_file")
 	
+	# run GLM with columsn 18 and 24 excluded (global noise)
 	task.connect(nu,"regressors",column_select,"in_file")
 	task.connect(column_select,"out_file",glm_NGS,"design")
 	task.connect(pp,"output.func",glm_NGS,"in_file")
 
-
+	# run corrolation of ROI avarages from filtered GLM image
 	task.connect(filt,"out_file",roiave,"in_file")
 	task.connect(roiave,"out_file",corroi,"in_files")
 		
-	
+	# feed GLM without global noise into ALFF 
 	for nm in alff_nm:
 		#task.connect(glm,'out_res',alff[nm],'inputspec.rest_res')
 		task.connect(glm_NGS,'out_res',alff[nm],'inputspec.rest_res')
 		task.connect(pp,'output.mask',alff[nm],'inputspec.rest_mask')	
 
+	# run REHO
 	task.connect(filt,"out_file",reho,"inputspec.rest_res_filt")
 	task.connect(pp,"output.mask",reho,"inputspec.rest_mask")
 	
+	# run network centrality
 	task.connect(glm,'out_res',nc,'inputspec.subject')
 	task.connect(nc,'outputspec.centrality_outputs',zscore,'inputspec.input_file')
 	task.connect(pp,'output.mask',zscore,'inputspec.mask_file')
 
+	# run SCA for each ROI
 	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]:
 		task.connect(filt,"out_file",maskave[mask],"in_file")
 		task.connect(filt,"out_file",sca[mask],"inputspec.functional_file")
@@ -691,13 +782,13 @@ def resting(directory,sequence):
 		task.connect(sca[mask],("outputspec.Z_score",subset,0),gunzip[mask],'in_file')
 		task.connect(sca[mask],"outputspec.Z_score",datasink,"data.sca."+mask)
 	
-	
+	# output results into datasink
 	task.connect(reho,"outputspec.z_score",datasink,"data.reho")
 	task.connect(corroi,"out_file",datasink,"csv.@par5")
+	
 	# alff_Z_img in 0.3.5 now in 0.3.6 falff_img	
 	for nm in alff_nm:	
 		task.connect(alff[nm],"outputspec.alff_Z_img",datasink,"data."+nm.lower())
-	
 	task.connect(zscore,"outputspec.z_score_img",datasink,"data.nc")
 	
 
@@ -709,7 +800,8 @@ def resting(directory,sequence):
 
 
 
-# run simply preprocessing
+# this method is here as a legacy when all we want to do is preprocess the dataset and
+# not run any sequence over it
 def preprocess(directory,sequence):
 	import nipype.pipeline.engine as pe          # pypeline engine
 	import nipype.interfaces.io as nio           # Data i/o
@@ -896,7 +988,7 @@ def asl(directory,sequence):
 
 
 
-# check sequence
+# check sequence (should we process it or not)
 def check_sequence(opt_list,directory,seq):
 	seq_dir = seq
 	
@@ -1027,6 +1119,5 @@ if __name__ == "__main__":
 		workflow.run(plugin='MultiProc', plugin_args={'n_procs' : conf.CPU_CORES})
 		log.info("elapsed time %.03f minutes\n" % ((time.time()-t)/60))
 
-	
 		
 	log.info("\n\npipeline complete\n\n")
