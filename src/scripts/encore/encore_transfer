@@ -125,6 +125,11 @@ do
 	[ $q -eq 0 ] && mkdir $TARGET_DIR/diff_105 >& /dev/null
 	[ $q -eq 0 ] && mv $TARGET_DIR/*diff105* $TARGET_DIR/diff_105 2>&1 | tee -a $LOG_FILE
 
+	check_dir $DIR SpinEcho ; q=$?
+	[ $q -eq 0 ] && mkdir $TARGET_DIR/spin_echo >& /dev/null
+	[ $q -eq 0 ] && mv $TARGET_DIR/*SpinEcho* $TARGET_DIR/spin_echo 2>&1 | tee -a $LOG_FILE
+
+
 	mkdir $TARGET_DIR/physio >& /dev/null
 	cp $DIR/*.[epr]* $TARGET_DIR/physio 2>&1 | tee -a $LOG_FILE
 	
@@ -151,6 +156,12 @@ do
 			mv $SD/*diff*.nii $SD/temp/${SUBJECT}_${SF}_PA.nii 2> /dev/null	
 			mv $SD/*diff*.bvec $SD/temp/${SUBJECT}_${SF}_PA.bvec 2> /dev/null	
 			mv $SD/*diff*.bval $SD/temp/${SUBJECT}_${SF}_PA.bval 2> /dev/null	
+			mv $SD/temp/* $SD/
+			rmdir $SD/temp
+		elif [ "${#FL[@]}" -eq 2 ]  && [[ ${FL[0]} == *"SpinEcho"* ]]; then
+			mkdir $SD/temp
+			mv $SD/*SpinEcho*AP*.nii $SD/temp/${SUBJECT}_${SF}_AP.nii 2> /dev/null	
+			mv $SD/*SpinEcho*.nii $SD/temp/${SUBJECT}_${SF}_PA.nii 2> /dev/null	
 			mv $SD/temp/* $SD/
 			rmdir $SD/temp
 		elif [ "${#FL[@]}" -eq 1 ]; then
