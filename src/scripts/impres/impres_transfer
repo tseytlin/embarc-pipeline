@@ -108,15 +108,15 @@ do
 	check_dir $DIR reward_1; q=$?
 	[ $q -eq 0 ] && mkdir $TARGET_DIR/reward_1 >& /dev/null
 	[ $q -eq 0 ] && mv $TARGET_DIR/*reward1*.nii $TARGET_DIR/reward_1 2>&1 | tee -a $LOG_FILE
-	[ $q -eq 0 ] && cp $DIR/BHV*/*Reward*-1.edat* $TARGET_DIR/reward_1 2>&1 | tee -a $LOG_FILE  
-	[ $q -eq 0 ] && cp_conv $DIR/BHV*/*Reward*-1.txt $TARGET_DIR/reward_1/ 2>&1 | tee -a $LOG_FILE  
+	[ $q -eq 0 ] && cp $DIR/BHV*/*Reward*-[13].edat* $TARGET_DIR/reward_1 2>&1 | tee -a $LOG_FILE  
+	[ $q -eq 0 ] && cp_conv $DIR/BHV*/*Reward*-[13].txt $TARGET_DIR/reward_1/ 2>&1 | tee -a $LOG_FILE  
 	
 	
 	check_dir $DIR reward_2 ; q=$?
 	[ $q -eq 0 ] && mkdir $TARGET_DIR/reward_2 >& /dev/null
 	[ $q -eq 0 ] && mv $TARGET_DIR/*reward2*.nii $TARGET_DIR/reward_2 2>&1 | tee -a $LOG_FILE
-	[ $q -eq 0 ] && cp $DIR/BHV*/*Reward*-2.edat* $TARGET_DIR/reward_2 2>&1 | tee -a $LOG_FILE  
-	[ $q -eq 0 ] && cp_conv $DIR/BHV*/*Reward*-2.txt $TARGET_DIR/reward_2/ 2>&1 | tee -a $LOG_FILE  
+	[ $q -eq 0 ] && cp $DIR/BHV*/*Reward*-[24].edat* $TARGET_DIR/reward_2 2>&1 | tee -a $LOG_FILE  
+	[ $q -eq 0 ] && cp_conv $DIR/BHV*/*Reward*-[24].txt $TARGET_DIR/reward_2/ 2>&1 | tee -a $LOG_FILE  
 	
 
 	mkdir $TARGET_DIR/physio >& /dev/null
@@ -201,6 +201,7 @@ do
 		then
 			mv $EPRIME_FILE tmp.txt 
 			iconv -f utf-16 -t utf-8 tmp.txt > ${EPRIME_FILE}
+			rm tmp.txt
 		fi
 	done
 	
