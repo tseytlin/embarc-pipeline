@@ -67,7 +67,7 @@ def datasource(directory, sequence):
 	else:
 
 		# define templates for datasource for functional and structural images
-		field_template = dict(func=sequence+"/*"+sequence+".img",struct="anat/*_anat_crop.nii")
+		field_template = dict(func=sequence+"/*"+sequence+".[ni][im][ig]",struct="anat/*_anat_crop.nii")
 		template_args  = dict(func=[[]],struct=[[]])                
 
 

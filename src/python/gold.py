@@ -70,6 +70,10 @@ class Config:
 
 		ROI_dir = data_dir+"/MNI_rois/"
 		ROI_suffix = "_mni.nii"
+
+		#ROI_dir = data_dir+"/OASIS_rois/"
+		#ROI_suffix = "_oasis.nii"
+
 		self.FNIRT_config = os.getenv("FSLDIR")+"/etc/flirtsch/T1_2_MNI152_2mm.cnf"
 		self.subject_site=""
 		########################
@@ -412,7 +416,7 @@ def preprocess2(config,useFieldmap=True,name='preprocess2'):
 		#TODO dwell_time = 0.79 ??? different for encore
 		#TODO dwell_to_asym_ratio
 	else:
-		# invert image using fslmats
+		# convert image using fslmats
 		convert_image = pe.Node(interface=math.MathsCommand(),name='convert_image')
 		convert_image.inputs.args = "-mul 1"
 		preproc.connect(coreg_func2struct,'coregistered_files',convert_image,'in_file')
@@ -447,6 +451,7 @@ def preprocess2(config,useFieldmap=True,name='preprocess2'):
 	# remove spikes
 	despike = pe.Node(interface=afni.Despike(), name='despike')
 	despike.inputs.outputtype = 'NIFTI'
+	#TODO: need params 3 and 5?  Default 2 and 4
 	preproc.connect(norm_func,'normalized_files',despike,'in_file')
 	
 	# calculated brighness threshold for susan (mean image intensity * 0.75)
@@ -580,6 +585,12 @@ def create_design_matrix(matlab_function, eprime_file):
 	import glob as gl
 	import nipype.interfaces.matlab as mlab 
 	
+	# get nDM file if available already
+	mat = os.path.join(os.path.dirname(eprime_file),'nDM*.mat')
+	mat = gl.glob(mat)
+	if len(mat) > 0:
+		return mat[0]
+
 	# execute matlab script to generate nDM file
 	m = mlab.MatlabCommand()
 	m.inputs.mfile = False
