@@ -10,6 +10,7 @@ import gold
 
 ## Predefined constants ##
 conf = gold.Config()
+conf.time_repetition  = 1.5
 
 # default value to use fieldmap in the pipeline
 useFieldmap=False
@@ -131,7 +132,7 @@ def resting(directory,sequence):
 
 	filt = pe.Node(interface=fsl.ImageMaths(), name="filter")
 	#filt.inputs.op_string = ' -bptf 128 12.5 '
-	filt.inputs.op_string = ' -bptf 37 4.167'  #TODO hard coded filters, but dependent on TR
+	filt.inputs.op_string = ' -bptf 83.33 6.67'  #TODO hard coded filters, but dependent on TR
 	filt.inputs.terminal_output = 'none'
 	
 	alff = dict()
