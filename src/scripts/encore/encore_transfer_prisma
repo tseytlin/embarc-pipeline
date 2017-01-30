@@ -88,7 +88,7 @@ do
 	
 	# convert all DICOM images to output target directory	
 	echo "  converting DICOM to NIFTI for $DIR_NAME .." 2>&1 | tee -a $LOG_FILE
-	for x in dir gre_field rs_2mm T1 UNI task
+	for x in dir gre_field rs_2mm T1 UNI task SpinEcho
 	do
 		dcm2nii -c n -g n -o $TARGET_DIR $DIR/*$x* >> $LOG_FILE 2>&1
 	done
