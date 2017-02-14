@@ -106,7 +106,7 @@ do
 	#uncompact.sh $DATA_DIR 2>&1 | tee -a $LOG_FILE
 
 	# call an EMBARC script
-	(time bios_resting.py $FLAGS $DATA_DIR) 2>&1 | tee -a $LOG_FILE
+	(time bios.py $FLAGS $DATA_DIR) 2>&1 | tee -a $LOG_FILE
 	
 	# create logs directory if not there
 	if [ ! -e ${DATA_DIR}/logs ];
@@ -118,6 +118,10 @@ do
 	#cat $LOG_FILE > ${DATA_DIR}/logs/$LOG_NAME
 	col -b < $LOG_FILE > ${DATA_DIR}/logs/$LOG_NAME
 	
+	# copy the original script to the logs directory
+	cp $(which bios.py) ${DATA_DIR}/logs/	
+
+
 	#echo "changing ownership of the output directory ..." 
 	#chgrp -R embarc ${DATA_DIR}  2>&1 | tee -a $LOG_FILE
 	#chmod -R ug+w   ${DATA_DIR}  2>&1 | tee -a $LOG_FILE
