@@ -404,13 +404,29 @@ def preprocess2(config,useFieldmap=True,name='preprocess2'):
 		preproc.connect(bet_mag,'out_file',prepare_field,'in_magnitude')
 		preproc.connect(invert_image,'out_file',prepare_field,'in_phase')
 
-	
+		
+		#DMH: ADD BELOW TO SKIP INVERSION STEP
+    		#preproc.connect(coreg_fphase2struct,'coregistered_files',prepare_field,'in_phase')	
+		#reslice fieldmap: added by DMH to run with BIOS data
+		#reslice_fieldmap = pe.Node(interface=fsl.ApplyXfm(), name='reslicenode')
+		#reslice_fieldmap.inputs.uses_qform = True
+		#reslice_fieldmap.inputs.apply_xfm = False
+		#preproc.connect(prepare_field,'out_fieldmap',reslice_fieldmap,'in_file')
+		#preproc.connect(inputnode,'func',reslice_fieldmap,'reference')
+
+
 		# FSL FUGUE
 		fugue = pe.Node(interface=fsl.FUGUE(),name='fieldmap_FUGUE')
 		fugue.inputs.dwell_time = config.fugue_dwell_time
 		fugue.inputs.poly_order = config.fugue_poly_order
+		#DMH: Change unwarp direction (from default y) based on Anna's suggestion		
+		#fugue.inputs.unwarp_direction = 'z'
 		preproc.connect(coreg_func2struct,'coregistered_files',fugue,'in_file')
 		preproc.connect(prepare_field,'out_fieldmap',fugue,'fmap_in_file')
+		
+		#DMH: Link FUGUE to resliced fieldmap		
+		#preproc.connect(reslice_fieldmap,'out_file',fugue,'fmap_in_file')		
+
 		#TODO mask from BET struct
 		#TODO asym_se_time
 		#TODO dwell_time = 0.79 ??? different for encore

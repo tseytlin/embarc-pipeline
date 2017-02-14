@@ -9,6 +9,56 @@ import gold
 
 ## Predefined constants ##
 conf = gold.Config()
+conf.time_repetition  = 2.0
+conf.CPU_CORES = 20
+conf.fugue_dwell_time = 0.00025	
+conf.filter_image_bptf = ' -bptf 50 1.4'	
+
+
+conf.bet_mask = True
+conf.bet_frac = 0.5 #0.6
+conf.bet_robust = True
+conf.bet_vertical_gradient = 0
+		
+conf.flirt_cost = 'mutualinfo'
+conf.flirt_bins = 256
+conf.flirt_dof = 12
+conf.flirt_interp = 'trilinear'
+conf.flirt_searchr_x = [-180, 180]
+conf.flirt_searchr_y = [-180, 180]
+conf.flirt_searchr_z = [-180, 180]
+
+conf.coregister_cost_function = "nmi"
+conf.coregister_separation = [4, 2]
+conf.coregister_tolerance = [0.02, 0.02, 0.02, 0.001, 0.001, 0.001, 0.01, 0.01, 0.01, 0.001, 0.001, 0.001]
+conf.coregister_fwhm = [7, 7]
+conf.prepare_fieldmap_scanner = "SIEMENS"
+conf.prepare_fieldmap_delta_TE = 2.46  
+
+conf.fugue_poly_order = 3
+
+conf.dartel_fwhm = 6 #TODO Check value
+conf.dartel_voxel_size =  (2, 2, 2)
+conf.susan_brightness_threshold = 750 #200.0
+conf.susan_fwhm = 6
+		
+conf.modelspec_concatenate_runs   = False
+conf.modelspec_high_pass_filter_cutoff = 60 # reward only
+conf.modelspec_input_units = 'secs'
+		
+conf.level1design_bases = {'hrf':{'derivs': [0,0]}}
+conf.level1design_timing_units = 'secs'
+conf.level1estimate_estimation_method = {'Classical' : 1}
+conf.contrastestimate_use_derivs = True
+conf.level1design_microtime_onset = 1
+conf.level1design_microtime_resolution = 16
+conf.level1design_model_serial_correlations = 'AR(1)'
+
+
+
+
+useFieldmap=True
+noPrint = False
 
 """
 EMBARC 1.0 Input Data Source
@@ -16,20 +66,33 @@ EMBARC 1.0 Input Data Source
 def datasource(directory, sequence):
 	import nipype.pipeline.engine as pe          # pypeline engine
 	import nipype.interfaces.io as nio           # Data i/o
-
+	import glob as gl
+	
 	# define some variables beforehand
 	subject=get_subject(directory)
 	
 	# define templates for datasource
-	field_template = dict(func=sequence+'/*.nii',
-                          struct='*mprage/*_crop.nii')
-	
+	field_template = dict(func=sequence+'/*.nii',struct='*mprage/*_crop.nii')	
 	template_args  = dict(func=[[]],struct=[[]])                
+	outfields=['func', 'struct']       
+
+
+#DMH: changed fieldmap to be resliced ones (to match dimensions of EPI), but this didn't work - commented out
+	if useFieldmap:
+			#field_template['fieldmap_mag']   = "field_map/magnitude/mag_resliced.nii"
+			#field_template['fieldmap_phase'] ="field_map/phase/phase_resliced.nii"
+			field_template['fieldmap_mag']   = "field_map/magnitude/*.nii"
+			field_template['fieldmap_phase'] ="field_map/phase/*.nii"
+			template_args['fieldmap_mag']  = [[]]
+			template_args['fieldmap_phase']  = [[]]
+			outfields.append('fieldmap_mag')
+			outfields.append('fieldmap_phase')
+
 
 	# specify input dataset just pass through parameters
 	datasource = pe.Node(interface=nio.DataGrabber(
 						 infields=['subject_id','sequence'], 
-						 outfields=['func', 'struct','behav']),
+						 outfields=outfields),
 	                     name = 'datasource')
 	datasource.inputs.base_directory = os.path.abspath(directory)
 	datasource.inputs.template = '*'
@@ -82,28 +145,41 @@ def resting(directory,sequence):
 		os.makedirs(out_dir)
 	subject = get_subject(directory)
 	
-	
+	conf.modelspec_high_pass_filter_cutoff = 256
 	
 	# setup some constants
-	resting_roi_names = ['LeftInsula','RightInsula','LeftAmygdala',
-			     'RightAmygdala','LeftVS','RightVS','LeftBA9','RightBA9',
-			     'BR1','BR2','BR3','BR4','BR9']
-	resting_roi_images = [conf.ROI_L_insula,conf.ROI_R_insula,conf.ROI_L_amyg,conf.ROI_R_amyg,
-			conf.ROI_VS_L,conf.ROI_VS_R,conf.ROI_BA9_L,conf.ROI_BA9_R,
-			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9]
-	
+	#resting_roi_names = ['LeftInsula','RightInsula','LeftAmygdala',
+	#		     'RightAmygdala','LeftVS','RightVS','LeftVLPFC','RightVLPFC',
+	#	       'BilateralAmygdala']
+	#resting_roi_images = [conf.ROI_L_insula,conf.ROI_R_insula,conf.ROI_L_amyg,conf.ROI_R_amyg,
+	#		conf.ROI_VS_L,conf.ROI_VS_R,conf.ROI_L_VLPFC,conf.ROI_R_VLPFC,
+	#		conf.ROI_amygdala_LR]	
+ 
+	# setup some constants (narrowed down, since not all are currently available in 91x109x91 dimensions)
+	resting_roi_names = ['LeftAmygdala','RightAmygdala','LeftVLPFC','RightVLPFC','LeftAI','RightAI','LeftDLPFC','RightDLPFC','vmPFC']
+	resting_roi_images = [conf.ROI_L_amyg,conf.ROI_R_amyg,conf.ROI_L_VLPFC,conf.ROI_R_VLPFC,conf.ROI_L_ant_insula, 		
+			      conf.ROI_R_ant_insula, conf.ROI_L_DLPFC, conf.ROI_R_DLPFC, conf.ROI_BA10]	
+ 
 	ds = datasource(directory,sequence)
-	pp = gold.preprocess(conf)
+	pp = gold.preprocess2(conf,useFieldmap)
 	
 	nu = pe.Node(interface=wrap.Nuisance(), name="nuisance")
 	nu.inputs.white_mask = conf.ROI_white
+	nu.inputs.time_repetition = conf.time_repetition
+
+	column_select = pe.Node(interface=wrap.ColumnSelect(),name="column_select")
+	column_select.inputs.selection = "18,24"
+	column_select.inputs.complement = True
+
 
 	glm = pe.Node(interface=fsl.GLM(), name="glm")
 	glm.inputs.out_res_name = "residual.4d.nii"
 	
+	glm_NGS = pe.Node(interface=fsl.GLM(), name="glm_NGS")
+	glm_NGS.inputs.out_res_name = "residual.4d.nii"
+
 	filt = pe.Node(interface=fsl.ImageMaths(), name="filter")
-	#filt.inputs.op_string = ' -bptf 128 12.5 '
-	filt.inputs.op_string = ' -bptf 37 4.167'
+	filt.inputs.op_string = conf.filter_image_bptf
 	filt.inputs.terminal_output = 'none'
 	
 	alff = dict()
@@ -124,19 +200,19 @@ def resting(directory,sequence):
 	nc.inputs.inputspec.threshold_option = 1
 	nc.inputs.inputspec.threshold = 0.0744 
 	nc.inputs.inputspec.template = conf.OASIS_labels
-	zscore =  CPAC.network_centrality.get_cent_zscore(wf_name='z_score')
-	
+	zscore =  CPAC.network_centrality.get_zscore(wf_name='z_score')
+
 	sca = dict()
 	maskave = dict()
-	#gunzip = dict()
+	gunzip = dict()
 	
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:
+	for mask in ["LeftAmygdala","RightAmygdala","LeftVLPFC","RightVLPFC","LeftAI","RightAI","LeftDLPFC","RightDLPFC","vmPFC"]:
 		sca[mask] = CPAC.sca.create_sca(name_sca="sca_"+mask);
 		maskave[mask] = pe.Node(interface=afni.Maskave(),name="roi_ave_"+mask)
 		maskave[mask].inputs.outputtype = "NIFTI"
 		maskave[mask].inputs.quiet= True
 		maskave[mask].inputs.mask = resting_roi_images[resting_roi_names.index(mask)]
-		#gunzip[mask] = pe.Node(interface=misc.Gunzip(),name="gunzip_"+mask)
+		gunzip[mask] = pe.Node(interface=misc.Gunzip(),name="gunzip_"+mask)
 	
 	roiave = pe.MapNode(interface=afni.Maskave(),name="roi_ave",iterfield="mask")
 	roiave.inputs.outputtype = "NIFTI"
@@ -156,10 +232,17 @@ def resting(directory,sequence):
 	task = pe.Workflow(name=sequence)
 	task.base_dir = base_dir
 	
-	task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])
+	if useFieldmap:	
+		task.connect([(ds,pp,[('func','input.func'),('struct','input.struct'),
+			('fieldmap_mag','input.fieldmap_mag'),('fieldmap_phase','input.fieldmap_phase')])])
+	else:
+		task.connect([(ds,pp,[('func','input.func'),('struct','input.struct')])])	
 	task.connect([(pp,nu,[('output.ufunc','source'),
-						 ('output.mask','brain_mask'),
-						 ('output.movement','movement')])])
+				 ('output.mask','brain_mask'),
+				 ('output.movement','movement')])])
+	
+
+
 	task.connect(nu,"regressors",glm,"design")
 	task.connect(pp,"output.func",glm,"in_file")
 	task.connect(glm,"out_res",filt,"in_file")
@@ -179,24 +262,25 @@ def resting(directory,sequence):
 	task.connect(nc,'outputspec.centrality_outputs',zscore,'inputspec.input_file')
 	task.connect(pp,'output.mask',zscore,'inputspec.mask_file')
 
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:
+	for mask in ["LeftAmygdala","RightAmygdala","LeftVLPFC","RightVLPFC","LeftAI","RightAI","LeftDLPFC","RightDLPFC","vmPFC"]:
 		task.connect(filt,"out_file",maskave[mask],"in_file")
 		task.connect(filt,"out_file",sca[mask],"inputspec.functional_file")
 		task.connect(maskave[mask],"out_file",sca[mask],"inputspec.timeseries_one_d")
-		#task.connect(sca[mask],("outputspec.Z_score",subset,0),gunzip[mask],'in_file')
+		task.connect(sca[mask],("outputspec.Z_score",subset,0),gunzip[mask],'in_file')
 		task.connect(sca[mask],"outputspec.Z_score",datasink,"data.sca."+mask)
 	
 	
-	task.connect(reho,"outputspec.raw_reho_map",datasink,"data.reho")
+	task.connect(reho,"outputspec.z_score",datasink,"data.reho")
 	task.connect(corroi,"out_file",datasink,"csv.@par5")
+	# alff_Z_img in 0.3.5 now in 0.3.6 falff_img	
 	for nm in alff_nm:	
-		task.connect(alff[nm],"outputspec.alff_img",datasink,"data."+nm.lower())
+		task.connect(alff[nm],"outputspec.alff_Z_img",datasink,"data."+nm.lower())
 	
 	task.connect(zscore,"outputspec.z_score_img",datasink,"data.nc")
 	
 
 	# print and save the output of the preprocess pipeline
-	gold.print_save_files(task,pp.get_node('output'),datasink,("func","movement","struct","mask"))	
+	gold.save_files(task,pp.get_node('output'),datasink,["func","movement","struct","mask"], not noPrint)	
 	
 	task.write_graph(dotfilename=sequence+"-workflow")#,graph2use='flat')
 	return task
@@ -204,9 +288,11 @@ def resting(directory,sequence):
 
 # run pipeline if used as standalone script
 if __name__ == "__main__":	
-	
+	opts = "[-fieldmap|-noprint]"
+	opt_list = []	
+
 	# get arguments
-	if len(sys.argv) < 1:
+	if len(sys.argv) < 2:
 		print "Usage: resting "+opts+" <subject directory>"
 		sys.exit(1)
 	
@@ -216,7 +302,12 @@ if __name__ == "__main__":
 	import logging
 	from nipype import config
 	import nipype.interfaces.matlab as mlab 
-	directory = sys.argv[1]
+	
+	# pick dataset that we'll be wroking on
+	for arg in sys.argv:
+		 if arg in opts:
+		 	opt_list.append(arg)
+	directory = sys.argv[len(sys.argv)-1]
 	
 	# check directory
 	if not os.path.exists(directory):
@@ -249,6 +340,14 @@ if __name__ == "__main__":
 	mlab.MatlabCommand.set_default_terminal_output('stream')
 	#mlab.MatlabCommand.set_default_paths(bin_dir)
 	
+	
+	if "-fieldmap" in opt_list:	
+		useFieldmap = True
+		opt_list.remove("-fieldmap")
+	if "-noprint" in opt_list:	
+		noPrint = True
+		opt_list.remove("-noprint")
+
 	log.info("\n\nRESTING pipeline ...\n\n")
 	t = time.time()		
 	resting1 = resting(directory,'lams_resting_state')
