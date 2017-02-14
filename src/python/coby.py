@@ -12,6 +12,54 @@ import gold
 # you need to redefine constants either here
 # or in each sequence
 conf = gold.Config()
+conf.CPU_CORES = 16
+conf.time_repetition  = 1.5
+		
+conf.bet_mask = True
+conf.bet_frac = 0.5 #0.6
+conf.bet_robust = True
+conf.bet_vertical_gradient = 0
+		
+conf.flirt_cost = 'mutualinfo'
+conf.flirt_bins = 256
+conf.flirt_dof = 12
+conf.flirt_interp = 'trilinear'
+conf.flirt_searchr_x = [-180, 180]
+conf.flirt_searchr_y = [-180, 180]
+conf.flirt_searchr_z = [-180, 180]
+
+conf.coregister_cost_function = "nmi"
+conf.coregister_separation = [4, 2]
+conf.coregister_tolerance = [0.02, 0.02, 0.02, 0.001, 0.001, 0.001, 0.01, 0.01, 0.01, 0.001, 0.001, 0.001]
+conf.coregister_fwhm = [7, 7]
+conf.prepare_fieldmap_scanner = "SIEMENS"
+conf.prepare_fieldmap_delta_TE = 2.46  
+	
+conf.fugue_dwell_time = 0.00064 # prizma scanner is default 
+conf.fugue_poly_order = 3
+
+conf.dartel_fwhm = 6 #TODO Check value
+conf.dartel_voxel_size =  (2, 2, 2)
+conf.susan_brightness_threshold = 750 #200.0
+conf.susan_fwhm = 6
+
+conf.filter_image_bptf = ' -bptf 37 4.167'  #hard coded filters, but dependent on TR
+	
+
+
+conf.modelspec_concatenate_runs   = False
+conf.modelspec_high_pass_filter_cutoff = 60 # reward only
+conf.modelspec_input_units = 'secs'
+		
+conf.level1design_bases = {'hrf':{'derivs': [0,0]}}
+conf.level1design_timing_units = 'secs'
+conf.level1estimate_estimation_method = {'Classical' : 1}
+conf.contrastestimate_use_derivs = True
+conf.level1design_microtime_onset = 1
+conf.level1design_microtime_resolution = 16
+conf.level1design_model_serial_correlations = 'AR(1)'
+
+
 
 # default value to use fieldmap in the pipeline
 useFieldmap=False
