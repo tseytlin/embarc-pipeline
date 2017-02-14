@@ -23,7 +23,7 @@ for DATA_DIR in $@
 do
 
 	# skip some flags
-	if [ $DATA_DIR == "-resting_state_hr"  -o $DATA_DIR == "-fieldmap" ];
+	if [ $DATA_DIR == "-resting_state_hr"  -o $DATA_DIR == "-fieldmap" -o $D == "-noprint" -o $D == "-trio" ];
 	then
 		FLAGS="${FLAGS} ${DATA_DIR}"
 		continue
@@ -143,6 +143,9 @@ do
 	#cat $LOG_FILE > ${DATA_DIR}/logs/$LOG_NAME
 	col -b < $LOG_FILE > ${DATA_DIR}/logs/$LOG_NAME
 	
+	# copy the original script to the logs directory
+	cp $(which encore.py) ${DATA_DIR}/logs/
+
 	#echo "changing ownership of the output directory ..." 
 	#chgrp -R embarc ${DATA_DIR}  2>&1 | tee -a $LOG_FILE
 	#chmod -R ug+w   ${DATA_DIR}  2>&1 | tee -a $LOG_FILE

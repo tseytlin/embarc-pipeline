@@ -1035,12 +1035,12 @@ def check_sequence(opt_list,directory,seq):
 #
 ########################################################################################
 if __name__ == "__main__":	
-	opts = "[-dynamic_faces|-efnback|-reward|-resting_state|-fieldmap|-noprint]"
+	opts = "[-dynamic_faces|-efnback|-reward|-resting_state|-fieldmap|-noprint|-trio]"
 	opt_list = []
 	
 	# get arguments
 	if len(sys.argv) < 2:
-		print "Usage: coby.py "+opts+" <diamond subject directory>"
+		print "Usage: coby.py "+opts+" <coby subject directory>"
 		sys.exit(1)
 	
 	# logging verbosity
@@ -1098,6 +1098,15 @@ if __name__ == "__main__":
 		noPrint = True
 		opt_list.remove("-noprint")
 	
+	# change dwell time based on scanner
+	if "-trio" in opt_list:
+		opt_list.remove("-trio")
+		conf.fugue_dwell_time = 0.000779983   # For encore Trio (currently in gold.py)
+	else:
+		conf.fugue_dwell_time = 0.00064   # For encore Prisma + Impress Prisma
+
+
+
 	if check_sequence(opt_list,directory,"reward"):
 		log.info("\n\nREWARD pipeline ...\n\n")
 		t = time.time()		

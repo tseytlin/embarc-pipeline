@@ -193,8 +193,8 @@ def reward(directory,sequence):
 	ds2 = datasource(directory,sequence+"_2")
 	
 	# get preprocess pipelines for each run
-	pp1 = gold.preprocess2(conf,useFieldmap,"preprocess_1")
-	pp2 = gold.preprocess2(conf,useFieldmap,"preprocess_2")
+	pp1 = gold.preprocess_mni(conf,useFieldmap,"preprocess_1")
+	pp2 = gold.preprocess_mni(conf,useFieldmap,"preprocess_2")
 		
 	# define a first level analysis pipeline
 	l1 = gold.level1analysis(conf);
@@ -373,8 +373,8 @@ def efnback(directory,sequence):
 	ds2 = datasource(directory,sequence+"_2")
 	
 	# run preprocess pipeline for both runs
-	pp1 = gold.preprocess2(conf,useFieldmap,"preprocess_1")
-	pp2 = gold.preprocess2(conf,useFieldmap,"preprocess_2")
+	pp1 = gold.preprocess_mni(conf,useFieldmap,"preprocess_1")
+	pp2 = gold.preprocess_mni(conf,useFieldmap,"preprocess_2")
 	
 	# define first level pipeline
 	l1 = gold.level1analysis(conf);
@@ -534,8 +534,8 @@ def dynamic_faces(directory,sequence):
 	# get datasoruce
 	ds = datasource(directory,sequence)	
 
-	# get preprocess2 pipeline
-	pp = gold.preprocess2(conf,useFieldmap)
+	# get preprocess_mni pipeline
+	pp = gold.preprocess_mni(conf,useFieldmap)
 
 	# get first level analysis
 	l1 = gold.level1analysis(conf);
@@ -675,7 +675,7 @@ def resting(directory,sequence):
 	
 	# get dataource an preprocess workflows
 	ds = datasource(directory,sequence)
-	pp = gold.preprocess2(conf,useFieldmap)
+	pp = gold.preprocess_mni(conf,useFieldmap)
 	
 	# define nuisance node
 	nu = pe.Node(interface=wrap.Nuisance(), name="nuisance")
@@ -841,8 +841,8 @@ def preprocess(directory,sequence):
 		
 	# get components
 	ds = datasource(directory,sequence)
-	pp = gold.preprocess2(conf)
-	#pp = gold.preprocess2_no_fieldmap(conf)	
+	pp = gold.preprocess_mni(conf)
+	#pp = gold.preprocess_mni_no_fieldmap(conf)	
 	#pp.get_node("input").inputs.template = embarc.OASIS_template	
 	
 	# connect components into a pipeline
@@ -1043,7 +1043,7 @@ if __name__ == "__main__":
 	
 	# get arguments
 	if len(sys.argv) < 2:
-		print "Usage: impres.py "+opts+" <diamond subject directory>"
+		print "Usage: impres.py "+opts+" <impres subject directory>"
 		sys.exit(1)
 	
 	# logging verbosity

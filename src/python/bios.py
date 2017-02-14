@@ -77,7 +77,7 @@ def datasource(directory, sequence):
 	outfields=['func', 'struct']       
 
 
-#DMH: changed fieldmap to be resliced ones (to match dimensions of EPI), but this didn't work - commented out
+	#DMH: changed fieldmap to be resliced ones (to match dimensions of EPI), but this didn't work - commented out
 	if useFieldmap:
 			#field_template['fieldmap_mag']   = "field_map/magnitude/mag_resliced.nii"
 			#field_template['fieldmap_phase'] ="field_map/phase/phase_resliced.nii"

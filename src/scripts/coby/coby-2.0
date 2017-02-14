@@ -26,7 +26,7 @@ for D in $@
 do
 
 	# skip some flags
-	if [ $D == "-dynamic_faces" -o $D == "-reward" -o $D == "-efnback" -o $D == "-resting_state"  -o $D == "-fieldmap" -o $D == "-asl" -o $D == "-noprint" ];
+	if [ $D == "-dynamic_faces" -o $D == "-reward" -o $D == "-efnback" -o $D == "-resting_state"  -o $D == "-fieldmap" -o $D == "-asl" -o $D == "-noprint" -o $D == "-trio" ];
 	then
 		FLAGS="${FLAGS} ${D}"
 	elif [ -d $D ];then
@@ -157,6 +157,9 @@ do
 	#cat $LOG_FILE > ${DATA_DIR}/logs/$LOG_NAME
 	col -b < $LOG_FILE > ${DATA_DIR}/logs/$LOG_NAME
 	
+	# copy the original script to the logs directory
+	cp $(which coby.py) ${DATA_DIR}/logs/
+
 	#echo "changing ownership of the output directory ..." 
 	#chgrp -R embarc ${DATA_DIR}  2>&1 | tee -a $LOG_FILE
 	#chmod -R ug+w   ${DATA_DIR}  2>&1 | tee -a $LOG_FILE
