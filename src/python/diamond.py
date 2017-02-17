@@ -689,12 +689,10 @@ def resting(directory,sequence):
 	# define resting ROI names
 	resting_roi_names = ['LeftInsula','RightInsula','LeftAmygdala',
 			     'RightAmygdala','LeftVS','RightVS','LeftBA9','RightBA9',
-			     'BR1','BR2','BR3','BR4','BR9', 'leftVLPFC']
-
-	# define resting ROI filname locations
+			     'BR1','BR2','BR3','BR4','BR9', 'leftVLPFC', 'leftPut', 'rightPut', 'leftCaud', 'rightCaud']
 	resting_roi_images = [conf.ROI_L_insula,conf.ROI_R_insula,conf.ROI_L_amyg,conf.ROI_R_amyg,
 			conf.ROI_VS_L,conf.ROI_VS_R,conf.ROI_BA9_L,conf.ROI_BA9_R,
-			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9, conf.ROI_leftVLPFC]
+			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9, conf.ROI_leftVLPFC, conf.ROI_putamen_L, conf.ROI_putamen_R, conf.ROI_caudate_head_L, conf.ROI_caudate_head_R]
 	
 	# get dataource an preprocess workflows
 	ds = datasource(directory,sequence)
@@ -751,8 +749,7 @@ def resting(directory,sequence):
 	maskave = dict()
 	gunzip = dict()
 	
-	# run SCA over a set of ROIs
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]:
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC", "leftPut", "rightPut", "leftCaud", "rightCaud"]:
 		sca[mask] = CPAC.sca.create_sca(name_sca="sca_"+mask);
 		maskave[mask] = pe.Node(interface=afni.Maskave(),name="roi_ave_"+mask)
 		maskave[mask].inputs.outputtype = "NIFTI"
@@ -821,8 +818,7 @@ def resting(directory,sequence):
 	task.connect(nc,'outputspec.centrality_outputs',zscore,'inputspec.input_file')
 	task.connect(pp,'output.mask',zscore,'inputspec.mask_file')
 
-	# run SCA for each ROI
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC"]:
+	for mask in ["BR9","LeftVS","RightVS","BR2","BR3", "leftVLPFC", "leftPut", "rightPut", "leftCaud", "rightCaud"]:
 		task.connect(filt,"out_file",maskave[mask],"in_file")
 		task.connect(filt,"out_file",sca[mask],"inputspec.functional_file")
 		task.connect(maskave[mask],"out_file",sca[mask],"inputspec.timeseries_one_d")
