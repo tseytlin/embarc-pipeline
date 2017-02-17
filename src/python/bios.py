@@ -213,15 +213,16 @@ def preprocess_mni(config,useFieldmap=True,name='preprocess2'):
 	
 		# after coreg fphase, invert phase image and pipe into prepare_field
 	
-		# get maximum from image
-		image_max = pe.Node(interface=fsl.ImageStats(),name='image_max')	
-		image_max.inputs.op_string = "-R"
-		preproc.connect(coreg_fphase2struct,'coregistered_files',image_max,'in_file')
+		# get maximum from image (DMH: COMMENT OUT TO SKIP INVERSION STEP)
+		#image_max = pe.Node(interface=fsl.ImageStats(),name='image_max')	
+		#image_max.inputs.op_string = "-R"
+		#preproc.connect(coreg_fphase2struct,'coregistered_files',image_max,'in_file')
 
-		# invert image using fslmats
-		invert_image = pe.Node(interface=math.MathsCommand(),name='invert_image')	
-		preproc.connect(coreg_fphase2struct,'coregistered_files',invert_image,'in_file')
-		preproc.connect(image_max,('out_stat',create_inversion_args, "-mul -1 -add "),invert_image,'args')	
+		# invert image using fslmats (DMH: COMMENT OUT TO SKIP INVERSION STEP)
+		#invert_image = pe.Node(interface=math.MathsCommand(),name='invert_image')	
+		#preproc.connect(coreg_fphase2struct,'coregistered_files',invert_image,'in_file')
+		#preproc.connect(image_max,('out_stat',create_inversion_args, "-mul -1 -add "),invert_image,'args')	
+			
 
 		# coregister magnitude image to structural
 		coreg_fmag2struct = pe.Node(interface=spm.Coregister(),name="coreg_fieldmapmag2struct")
@@ -248,37 +249,34 @@ def preprocess_mni(config,useFieldmap=True,name='preprocess2'):
 		prepare_field.inputs.scanner = config.prepare_fieldmap_scanner
 		prepare_field.inputs.delta_TE = config.prepare_fieldmap_delta_TE
 		preproc.connect(bet_mag,'out_file',prepare_field,'in_magnitude')
-		preproc.connect(invert_image,'out_file',prepare_field,'in_phase')
-
+		#DMH: COMMENT BELOW TO SKIP INVERSION STEP	
+		#preproc.connect(invert_image,'out_file',prepare_field,'in_phase')
+    		#DMH: ADD BELOW TO SKIP INVERSION STEP
+    		preproc.connect(coreg_fphase2struct,'coregistered_files',prepare_field,'in_phase')
 		
-		#DMH: ADD BELOW TO SKIP INVERSION STEP
-    		#preproc.connect(coreg_fphase2struct,'coregistered_files',prepare_field,'in_phase')	
 		#reslice fieldmap: added by DMH to run with BIOS data
-		#reslice_fieldmap = pe.Node(interface=fsl.ApplyXfm(), name='reslicenode')
-		#reslice_fieldmap.inputs.uses_qform = True
-		#reslice_fieldmap.inputs.apply_xfm = False
-		#preproc.connect(prepare_field,'out_fieldmap',reslice_fieldmap,'in_file')
-		#preproc.connect(inputnode,'func',reslice_fieldmap,'reference')
-
+		reslice_fieldmap = pe.Node(interface=fsl.ApplyXfm(), name='reslicenode')
+		reslice_fieldmap.inputs.uses_qform = True
+		reslice_fieldmap.inputs.apply_xfm = False
+		preproc.connect(prepare_field,'out_fieldmap',reslice_fieldmap,'in_file')
+		preproc.connect(inputnode,'func',reslice_fieldmap,'reference')
 
 		# FSL FUGUE
 		fugue = pe.Node(interface=fsl.FUGUE(),name='fieldmap_FUGUE')
 		fugue.inputs.dwell_time = config.fugue_dwell_time
 		fugue.inputs.poly_order = config.fugue_poly_order
 		#DMH: Change unwarp direction (from default y) based on Anna's suggestion		
-		#fugue.inputs.unwarp_direction = 'z'
+		fugue.inputs.unwarp_direction = 'z'
 		preproc.connect(coreg_func2struct,'coregistered_files',fugue,'in_file')
-		preproc.connect(prepare_field,'out_fieldmap',fugue,'fmap_in_file')
-		
 		#DMH: Link FUGUE to resliced fieldmap		
-		#preproc.connect(reslice_fieldmap,'out_file',fugue,'fmap_in_file')		
-
+		preproc.connect(reslice_fieldmap,'out_file',fugue,'fmap_in_file')
+		#preproc.connect(prepare_field,'out_fieldmap',fugue,'fmap_in_file')
 		#TODO mask from BET struct
 		#TODO asym_se_time
 		#TODO dwell_time = 0.79 ??? different for encore
 		#TODO dwell_to_asym_ratio
 	else:
-		# convert image using fslmats
+		# invert image using fslmats
 		convert_image = pe.Node(interface=math.MathsCommand(),name='convert_image')
 		convert_image.inputs.args = "-mul 1"
 		preproc.connect(coreg_func2struct,'coregistered_files',convert_image,'in_file')
@@ -313,7 +311,6 @@ def preprocess_mni(config,useFieldmap=True,name='preprocess2'):
 	# remove spikes
 	despike = pe.Node(interface=afni.Despike(), name='despike')
 	despike.inputs.outputtype = 'NIFTI'
-	#TODO: need params 3 and 5?  Default 2 and 4
 	preproc.connect(norm_func,'normalized_files',despike,'in_file')
 	
 	# calculated brighness threshold for susan (mean image intensity * 0.75)
