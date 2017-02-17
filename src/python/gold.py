@@ -286,7 +286,7 @@ output:
 	movement - realign movement parameters
 	struct - structural processed image
 """
-def preprocess_mni(config,useFieldmap=True,name='preprocess2'):
+def preprocess_mni(config,useFieldmap=True,name='preprocess'):
 	import nipype.interfaces.spm as spm          # spm
 	import nipype.interfaces.fsl as fsl          # fsl
 	import nipype.interfaces.fsl.maths as math  

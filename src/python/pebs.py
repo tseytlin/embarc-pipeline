@@ -103,8 +103,8 @@ def reward(directory,sequence):
 	ds1 = datasource(directory,sequence+"_1")
 	ds2 = datasource(directory,sequence+"_2")
 	
-	pp1 = gold.preprocess2(conf,useFieldmap,"preprocess_1")
-	pp2 = gold.preprocess2(conf,useFieldmap,"preprocess_2")
+	pp1 = gold.preprocess_mni(conf,useFieldmap,"preprocess_1")
+	pp2 = gold.preprocess_mni(conf,useFieldmap,"preprocess_2")
 		
 	l1 = gold.level1analysis(conf);
 	l1.inputs.input.contrasts = contrasts
@@ -277,8 +277,8 @@ def efnback(directory,sequence):
 	ds1 = datasource(directory,sequence+"_1")
 	ds2 = datasource(directory,sequence+"_2")
 	
-	pp1 = gold.preprocess2(conf,useFieldmap,"preprocess_1")
-	pp2 = gold.preprocess2(conf,useFieldmap,"preprocess_2")
+	pp1 = gold.preprocess_mni(conf,useFieldmap,"preprocess_1")
+	pp2 = gold.preprocess_mni(conf,useFieldmap,"preprocess_2")
 	
 	
 	l1 = gold.level1analysis(conf);
@@ -392,7 +392,7 @@ def dynamic_faces(directory,sequence):
 
 	# get components
 	ds = datasource(directory,sequence)	
-	pp = gold.preprocess2(conf,useFieldmap)
+	pp = gold.preprocess_mni(conf,useFieldmap)
 	l1 = gold.level1analysis(conf);
 	l1.inputs.input.contrasts = contrasts
 	
@@ -508,7 +508,7 @@ def resting(directory,sequence):
 			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9] #, conf.ROI_leftVLPFC
 	
 	ds = datasource(directory,sequence)
-	pp = gold.preprocess2(conf,useFieldmap)
+	pp = gold.preprocess_mni(conf,useFieldmap)
 	
 	nu = pe.Node(interface=wrap.Nuisance(), name="nuisance")
 	nu.inputs.white_mask = conf.ROI_white
@@ -657,8 +657,8 @@ def preprocess(directory,sequence):
 		
 	# get components
 	ds = datasource(directory,sequence)
-	pp = gold.preprocess2(conf)
-	#pp = gold.preprocess2_no_fieldmap(conf)	
+	pp = gold.preprocess_mni(conf)
+	#pp = gold.preprocess_mni_no_fieldmap(conf)	
 	#pp.get_node("input").inputs.template = embarc.OASIS_template	
 	
 	# connect components into a pipeline
