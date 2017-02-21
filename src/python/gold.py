@@ -106,8 +106,8 @@ class Config:
 		self.ROI_R_ant_insula = ROI_dir+"right_anterior_insula"+ROI_suffix
 		self.ROI_putamen_L = ROI_dir+"left_putamen"+ROI_suffix
 		self.ROI_putamen_R = ROI_dir+"right_putamen"+ROI_suffix
-		self.ROI_caudate_body_L = ROI_dir+"left_caudate"+ROI_suffix
-		self.ROI_caudate_body_R = ROI_dir+"right_caudate"+ROI_suffix
+		#self.ROI_caudate_body_L = ROI_dir+"left_caudate"+ROI_suffix
+		#self.ROI_caudate_body_R = ROI_dir+"right_caudate"+ROI_suffix
 		self.ROI_caudate_head_L = ROI_dir+"left_caudate"+ROI_suffix
 		self.ROI_caudate_head_R = ROI_dir+"right_caudate"+ROI_suffix
 		self.ROI_amygdala_LR = ROI_dir+"bilateral_amygdala"+ROI_suffix

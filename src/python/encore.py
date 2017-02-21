@@ -5,7 +5,7 @@
 import sys
 import os                                  
 import re
-import embarc
+#import embarc
 import gold
 
 ## Predefined constants ##
@@ -154,11 +154,16 @@ def resting(directory,sequence):
 	# setup some constants
 	resting_roi_names = ['LeftInsula','RightInsula','LeftAmygdala',
 			     'RightAmygdala','LeftVS','RightVS','LeftBA9','RightBA9',
-			     'BR1','BR2','BR3','BR4','BR9'] #, 'leftVLPFC'
+			     'BR1','BR2','BR3','BR4','BR9','LeftBA47','RightBA47','LeftPutamen','RightPutamen',
+			     'LeftCaudateHead','RightCaudateHead'] #, 'leftVLPFC'
+
 	resting_roi_images = [conf.ROI_L_insula,conf.ROI_R_insula,conf.ROI_L_amyg,conf.ROI_R_amyg,
 			conf.ROI_VS_L,conf.ROI_VS_R,conf.ROI_BA9_L,conf.ROI_BA9_R,
-			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9] #, conf.ROI_leftVLPFC
-	
+			conf.ROI_BR1,conf.ROI_BR2,conf.ROI_BR3,conf.ROI_BR4,conf.ROI_BR9,
+			conf.ROI_L_VLPFC,conf.ROI_R_VLPFC, conf.ROI_putamen_L, conf.ROI_putamen_R,
+			conf.ROI_caudate_head_L,conf.ROI_caudate_head_R] #, 				conf.ROI_leftVLPFC
+
+
 	ds = datasource(directory,sequence)
 	pp = gold.preprocess_mni(conf,useFieldmap)
 	
@@ -203,15 +208,7 @@ def resting(directory,sequence):
 	sca = dict()
 	maskave = dict()
 	gunzip = dict()
-	
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]:
-		sca[mask] = CPAC.sca.create_sca(name_sca="sca_"+mask);
-		maskave[mask] = pe.Node(interface=afni.Maskave(),name="roi_ave_"+mask)
-		maskave[mask].inputs.outputtype = "NIFTI"
-		maskave[mask].inputs.quiet= True
-		maskave[mask].inputs.mask = resting_roi_images[resting_roi_names.index(mask)]
-		gunzip[mask] = pe.Node(interface=misc.Gunzip(),name="gunzip_"+mask)
-	
+
 	roiave = pe.MapNode(interface=afni.Maskave(),name="roi_ave",iterfield="mask")
 	roiave.inputs.outputtype = "NIFTI"
 	roiave.inputs.mask = resting_roi_images
@@ -263,7 +260,15 @@ def resting(directory,sequence):
 	task.connect(nc,'outputspec.centrality_outputs',zscore,'inputspec.input_file')
 	task.connect(pp,'output.mask',zscore,'inputspec.mask_file')
 
-	for mask in ["BR9","LeftVS","RightVS","BR2","BR3"]: # add left vlpfc
+	for mask in resting_roi_names:
+		#["BR9","LeftVS","RightVS","BR2","BR3"]: # add left vlpfc
+		sca[mask] = CPAC.sca.create_sca(name_sca="sca_"+mask);
+		maskave[mask] = pe.Node(interface=afni.Maskave(),name="roi_ave_"+mask)
+		maskave[mask].inputs.outputtype = "NIFTI"
+		maskave[mask].inputs.quiet= True
+		maskave[mask].inputs.mask = resting_roi_images[resting_roi_names.index(mask)]
+		gunzip[mask] = pe.Node(interface=misc.Gunzip(),name="gunzip_"+mask)
+
 		task.connect(filt,"out_file",maskave[mask],"in_file")
 		task.connect(filt,"out_file",sca[mask],"inputspec.functional_file")
 		task.connect(maskave[mask],"out_file",sca[mask],"inputspec.timeseries_one_d")
