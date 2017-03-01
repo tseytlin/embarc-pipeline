@@ -23,7 +23,8 @@ for DATA_DIR in $@
 do
 
 	# skip some flags
-	if [ $DATA_DIR == "-resting_state_hr"  -o $DATA_DIR == "-fieldmap" -o $D == "-noprint" -o $D == "-trio" ];
+	D=$DATA_DIR
+	if [ $D == "-resting_state_hr"  -o $D == "-fieldmap" -o $D == "-noprint" -o $D == "-trio" ];
 	then
 		FLAGS="${FLAGS} ${DATA_DIR}"
 		continue
