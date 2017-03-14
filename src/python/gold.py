@@ -160,7 +160,7 @@ def preprocess_oasis(config,name='preprocess'):
 	bet_struct.inputs.vertical_gradient = config.bet_vertical_gradient
 	preproc.connect(inputnode,'struct',bet_struct,'in_file')	
 
-	# flirt_meam2struct structural to mean functional 
+	# flirt_mean2struct structural to mean functional 
 	flirt_m2s = pe.Node(interface=fsl.FLIRT(), name='flirt_mean2struct')
 	flirt_m2s.inputs.cost = config.flirt_cost
 	flirt_m2s.inputs.bins = config.flirt_bins
@@ -409,7 +409,7 @@ def preprocess_mni(config,useFieldmap=True,name='preprocess'):
 		#TODO dwell_time = 0.79 ??? different for encore
 		#TODO dwell_to_asym_ratio
 	else:
-		# convert image using fslmats
+		# convert image using fslmaths
 		convert_image = pe.Node(interface=math.MathsCommand(),name='convert_image')
 		convert_image.inputs.args = "-mul 1"
 		preproc.connect(coreg_func2struct,'coregistered_files',convert_image,'in_file')
@@ -431,7 +431,6 @@ def preprocess_mni(config,useFieldmap=True,name='preprocess'):
 		preproc.connect(fugue,'unwarped_file',norm_func,'apply_to_files')
 	else:
 		preproc.connect(convert_image,'out_file',norm_func,'apply_to_files')
-		#preproc.connect(coreg_func2struct,'coregistered_files',norm_func,'apply_to_files')
 
 	# now lets do normalization with DARTEL
 	norm_struct =  pe.Node(interface=spm.DARTELNorm2MNI(modulate=True),name='norm_struct')
@@ -447,16 +446,236 @@ def preprocess_mni(config,useFieldmap=True,name='preprocess'):
 	#TODO: need params 3 and 5?  Default 2 and 4
 	preproc.connect(norm_func,'normalized_files',despike,'in_file')
 	
+
+	# create a nice mask to output	
+	bet_func = pe.Node(interface=fsl.BET(), name="bet_func")
+	bet_func.inputs.mask = config.bet_mask
+	bet_func.inputs.frac = config.bet_frac
+	bet_func.inputs.robust = config.bet_robust
+	bet_func.inputs.vertical_gradient = config.bet_vertical_gradient
+	preproc.connect(despike,'out_file',bet_func,'in_file')	
+
 	# calculated brighness threshold for susan (mean image intensity * 0.75)
 	image_mean = pe.Node(interface=fsl.ImageStats(),name='image_mean')	
 	image_mean.inputs.op_string = "-M"
-	#preproc.connect(bet_mean,'out_file',image_mean,'in_file')
-	preproc.connect(despike,'out_file',image_mean,'in_file')
-
+	preproc.connect(bet_func,'out_file',image_mean,'in_file')
 
 	# scale image so that mean 1000/original
 	scale_image = pe.Node(interface=math.MathsCommand(),name='scale_image')
-	preproc.connect(despike,'out_file',scale_image,'in_file')
+	preproc.connect(bet_func,'out_file',scale_image,'in_file')
+	preproc.connect(image_mean,('out_stat',create_scale_args, "-mul 1000 -div "),scale_image,'args')
+
+	# smooth image using SUSAN
+	susan = pe.Node(interface=fsl.SUSAN(), name="smooth")
+	susan.inputs.brightness_threshold = config.susan_brightness_threshold 
+	susan.inputs.fwhm = config.susan_fwhm
+	preproc.connect(scale_image,'out_file',susan,'in_file') 
+	preproc.connect(image_mean,('out_stat',create_brightness_threshold),susan,'brightness_threshold') 
+	            
+	# gather output
+	outputnode = pe.Node(interface=util.IdentityInterface(fields=['func','ufunc','mask','movement','struct']),name='output')
+	preproc.connect(bet_func,'out_file',outputnode, 'ufunc')
+	preproc.connect(susan,'smoothed_file',outputnode,'func')
+	preproc.connect(realign,'realignment_parameters',outputnode,'movement')
+	preproc.connect(norm_struct,'normalized_files',outputnode,'struct')
+	preproc.connect(bet_func,'mask_file',outputnode,'mask')
+	
+	return preproc
+
+
+"""
+DIAMOND 2.0 PreProcessing Pipeline
+input: 
+	func  - functional image
+	struct - structural image
+	template - template image
+	fieldmap_mag - fieldmap magnitute image
+	fieldmap_phase	- phase image
+output:
+	func  - functional processed images
+	ufunc - unsmoothed functional image
+	mask  - mask image from the functional
+	movement - realign movement parameters
+	struct - structural processed image
+"""
+def preprocess_native(config,useFieldmap=True,name='preprocess_native'):
+	import nipype.interfaces.spm as spm          # spm
+	import nipype.interfaces.fsl as fsl          # fsl
+	import nipype.interfaces.fsl.maths as math  
+	import nipype.interfaces.utility as util     # utility
+	import nipype.pipeline.engine as pe          # pypeline engine
+	import nipype.interfaces.afni as afni	     # afni
+	import nipype.workflows.fmri.spm.preprocess as dartel # preprocess
+	from nipype.interfaces.nipy.preprocess import Trim
+
+	fsl.FSLCommand.set_default_output_type('NIFTI')
+	
+	
+	preproc = pe.Workflow(name=name)
+	inputFields = ['func','struct']
+	if useFieldmap:
+		inputFields = ['func','struct','free_struct','fieldmap_mag','fieldmap_phase']
+		
+	inputnode = pe.Node(interface=util.IdentityInterface(fields=inputFields),name='input')
+
+	# realign 4D functional
+	realign = pe.Node(interface=spm.Realign(), name="realign")
+	realign.inputs.register_to_mean = True
+	preproc.connect(inputnode,"func",realign,"in_files")
+
+	# skull strip mean functional image
+	bet_mean = pe.Node(interface=fsl.BET(), name="bet_mean")
+	bet_mean.inputs.mask = config.bet_mask
+	bet_mean.inputs.frac = config.bet_frac
+	bet_mean.inputs.robust = config.bet_robust
+	bet_mean.inputs.vertical_gradient = config.bet_vertical_gradient
+	preproc.connect(realign,'mean_image',bet_mean,'in_file') 
+
+	# skull strip mean structural image
+	bet_struct = pe.Node(interface=fsl.BET(), name="bet_struct")
+	bet_struct.inputs.mask = config.bet_mask
+	bet_struct.inputs.frac = config.bet_frac
+	bet_struct.inputs.robust = config.bet_robust
+	bet_struct.inputs.vertical_gradient = config.bet_vertical_gradient
+	preproc.connect(inputnode,'struct',bet_struct,'in_file')	
+
+
+	# coregister images
+	coreg_func2struct = pe.Node(interface=spm.Coregister(),name="coreg_func2struct")
+	coreg_func2struct.inputs.jobtype = "estimate"
+ 	coreg_func2struct.inputs.cost_function = config.coregister_cost_function
+	coreg_func2struct.inputs.separation = config.coregister_separation
+	coreg_func2struct.inputs.tolerance = config.coregister_tolerance
+	coreg_func2struct.inputs.fwhm = config.coregister_fwhm
+	preproc.connect(bet_struct,'out_file',coreg_func2struct,'target')
+	preproc.connect(realign,'realigned_files',coreg_func2struct,'apply_to_files')
+	preproc.connect(bet_mean,'out_file',coreg_func2struct,'source')
+
+
+	# select first image of mag
+	if useFieldmap:
+		firstmag = pe.Node(interface=Trim(),name="firstmag")
+		firstmag.inputs.begin_index = 0	
+		firstmag.inputs.end_index = 1
+		preproc.connect(inputnode,'fieldmap_mag',firstmag,'in_file')
+
+		# coregister phase image to structural
+		coreg_fphase2struct = pe.Node(interface=spm.Coregister(),name="coreg_fieldmapphase2struct")
+		coreg_fphase2struct.inputs.jobtype = "estimate"
+		coreg_fphase2struct.inputs.cost_function = config.coregister_cost_function
+		coreg_fphase2struct.inputs.separation = config.coregister_separation
+		coreg_fphase2struct.inputs.tolerance = config.coregister_tolerance
+		coreg_fphase2struct.inputs.fwhm = config.coregister_fwhm
+		preproc.connect(bet_struct,'out_file',coreg_fphase2struct,'target')
+		preproc.connect(firstmag,'out_file',coreg_fphase2struct,'source')
+		preproc.connect(inputnode,'fieldmap_phase',coreg_fphase2struct,'apply_to_files')
+		
+		# after coreg fphase, invert phase image and pipe into prepare_field
+	
+		# get maximum from image
+		image_max = pe.Node(interface=fsl.ImageStats(),name='image_max')	
+		image_max.inputs.op_string = "-R"
+		preproc.connect(coreg_fphase2struct,'coregistered_files',image_max,'in_file')
+
+		# invert image using fslmats
+		invert_image = pe.Node(interface=math.MathsCommand(),name='invert_image')	
+		preproc.connect(coreg_fphase2struct,'coregistered_files',invert_image,'in_file')
+		preproc.connect(image_max,('out_stat',create_inversion_args, "-mul -1 -add "),invert_image,'args')	
+
+		# coregister magnitude image to structural
+		coreg_fmag2struct = pe.Node(interface=spm.Coregister(),name="coreg_fieldmapmag2struct")
+		coreg_fmag2struct.inputs.jobtype = "estimate"
+		coreg_fmag2struct.inputs.cost_function = config.coregister_cost_function
+		coreg_fmag2struct.inputs.separation = config.coregister_separation
+		coreg_fmag2struct.inputs.tolerance = config.coregister_tolerance
+		coreg_fmag2struct.inputs.fwhm = config.coregister_fwhm
+		preproc.connect(bet_struct,'out_file',coreg_fmag2struct,'target')
+		preproc.connect(firstmag,'out_file',coreg_fmag2struct,'source')
+		preproc.connect(inputnode,'fieldmap_mag',coreg_fmag2struct, 'apply_to_files')
+	
+		# skull strip magnitude image
+		bet_mag = pe.Node(interface=fsl.BET(), name="bet_mag")
+		bet_mag.inputs.mask = config.bet_mask
+		bet_mag.inputs.frac = config.bet_frac
+		bet_mag.inputs.robust = config.bet_robust
+		bet_mag.inputs.vertical_gradient = config.bet_vertical_gradient
+		preproc.connect(coreg_fmag2struct,'coregistered_source',bet_mag,'in_file')
+	
+		# prepare fieldmap
+		prepare_field = pe.Node(interface=fsl.PrepareFieldmap(),name='prepare_fieldmap')
+		prepare_field.inputs.output_type = "NIFTI"
+		prepare_field.inputs.scanner = config.prepare_fieldmap_scanner
+		prepare_field.inputs.delta_TE = config.prepare_fieldmap_delta_TE
+		preproc.connect(bet_mag,'out_file',prepare_field,'in_magnitude')
+		preproc.connect(invert_image,'out_file',prepare_field,'in_phase')
+
+		# FSL FUGUE
+		fugue = pe.Node(interface=fsl.FUGUE(),name='fieldmap_FUGUE')
+		fugue.inputs.dwell_time = config.fugue_dwell_time
+		fugue.inputs.poly_order = config.fugue_poly_order
+		preproc.connect(coreg_func2struct,'coregistered_files',fugue,'in_file')
+		preproc.connect(prepare_field,'out_fieldmap',fugue,'fmap_in_file')
+
+		#TODO mask from BET struct
+		#TODO asym_se_time
+		#TODO dwell_time = 0.79 ??? different for encore
+		#TODO dwell_to_asym_ratio
+	else:
+		# convert image using fslmats
+		convert_image = pe.Node(interface=math.MathsCommand(),name='convert_image')
+		convert_image.inputs.args = "-mul 1"
+		preproc.connect(coreg_func2struct,'coregistered_files',convert_image,'in_file')
+	
+	
+	# flirt_mean2struct structural to mean functional 
+	flirt_m2s = pe.Node(interface=fsl.FLIRT(), name='flirt_mean2free_struct')
+	flirt_m2s.inputs.cost = config.flirt_cost
+	flirt_m2s.inputs.bins = config.flirt_bins
+	flirt_m2s.inputs.dof = config.flirt_dof
+	flirt_m2s.inputs.interp = config.flirt_interp
+	flirt_m2s.inputs.searchr_x = config.flirt_searchr_x
+	flirt_m2s.inputs.searchr_y = config.flirt_searchr_y
+	flirt_m2s.inputs.searchr_z = config.flirt_searchr_z
+	preproc.connect(inputnode,'free_struct',flirt_m2s,'reference')
+	preproc.connect(bet_mean,'out_file',flirt_m2s,'in_file')
+
+
+	# apply transform to realigned 4d functional referenced to structural
+	apply_f2s = pe.Node(interface=fsl.ApplyXfm(),name='apply_func2free_struct')
+	apply_f2s.inputs.interp =  config.flirt_interp
+	apply_f2s.inputs.reference = config.OASIS_template
+	preproc.connect(inputnode,'free_struct',apply_f2s,'reference')	
+	preproc.connect(flirt_m2s,'out_matrix_file',apply_f2s,'in_matrix_file')
+	if useFieldmap:
+		preproc.connect(fugue,'unwarped_file',apply_f2s,'in_file')
+	else:
+		preproc.connect(convert_image,'out_file',apply_f2s,'in_file')
+
+	
+	# remove spikes
+	despike = pe.Node(interface=afni.Despike(), name='despike')
+	despike.inputs.outputtype = 'NIFTI'
+	#TODO: need params 3 and 5?  Default 2 and 4
+	#preproc.connect(norm_func,'normalized_files',despike,'in_file')
+	preproc.connect(apply_f2s,'out_file',despike,'in_file')
+	
+
+	# create a nice mask to output	
+	bet_func = pe.Node(interface=fsl.BET(), name="bet_func")
+	bet_func.inputs.mask = config.bet_mask
+	bet_func.inputs.frac = config.bet_frac
+	bet_func.inputs.robust = config.bet_robust
+	bet_func.inputs.vertical_gradient = config.bet_vertical_gradient
+	preproc.connect(despike,'out_file',bet_func,'in_file')	
+
+	# calculated brighness threshold for susan (mean image intensity * 0.75)
+	image_mean = pe.Node(interface=fsl.ImageStats(),name='image_mean')	
+	image_mean.inputs.op_string = "-M"
+	preproc.connect(bet_func,'out_file',image_mean,'in_file')
+
+	# scale image so that mean 1000/original
+	scale_image = pe.Node(interface=math.MathsCommand(),name='scale_image')
+	preproc.connect(bet_func,'out_file',scale_image,'in_file')
 	preproc.connect(image_mean,('out_stat',create_scale_args, "-mul 1000 -div "),scale_image,'args')
 
 
@@ -465,26 +684,20 @@ def preprocess_mni(config,useFieldmap=True,name='preprocess'):
 	susan.inputs.brightness_threshold = config.susan_brightness_threshold 
 	susan.inputs.fwhm = config.susan_fwhm
 	preproc.connect(scale_image,'out_file',susan,'in_file') 
-	#preproc.connect(despike,'out_file',susan,'in_file') 
-	#preproc.connect(image_mean,('out_stat',create_brightness_threshold),susan,'brightness_threshold') 
-
-	# create a nice mask to output	
-	bet_func = pe.Node(interface=fsl.BET(), name="bet_func")
-	bet_func.inputs.mask = config.bet_mask
-	bet_func.inputs.frac = config.bet_frac
-	bet_func.inputs.robust = config.bet_robust
-	bet_func.inputs.vertical_gradient = config.bet_vertical_gradient
-	preproc.connect(susan,'smoothed_file',bet_func,'in_file')	
+	preproc.connect(image_mean,('out_stat',create_brightness_threshold),susan,'brightness_threshold') 
 	            
 	# gather output
 	outputnode = pe.Node(interface=util.IdentityInterface(fields=['func','ufunc','mask','movement','struct']),name='output')
-	preproc.connect(despike,'out_file',outputnode, 'ufunc')
+	preproc.connect(bet_func,'out_file',outputnode, 'ufunc')
 	preproc.connect(susan,'smoothed_file',outputnode,'func')
 	preproc.connect(realign,'realignment_parameters',outputnode,'movement')
-	preproc.connect(norm_struct,'normalized_files',outputnode,'struct')
+	#preproc.connect(norm_struct,'normalized_files',outputnode,'struct')
+	preproc.connect(inputnode,'free_struct',outputnode,'struct')
 	preproc.connect(bet_func,'mask_file',outputnode,'mask')
 	
 	return preproc
+
+
 
 """
 load Matlab Design Matrix (nDM file)
