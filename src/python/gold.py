@@ -22,6 +22,12 @@ class Config:
 		self.bet_robust = True
 		self.bet_vertical_gradient = 0
 		
+		self.struct_bet_mask = True
+		self.struct_bet_frac = 0.5 #0.6
+		self.struct_bet_robust = True
+		self.struct_bet_vertical_gradient = 0
+
+		
 		self.flirt_cost = 'mutualinfo'
 		self.flirt_bins = 256
 		self.flirt_dof = 12
@@ -154,10 +160,10 @@ def preprocess_oasis(config,name='preprocess'):
 	preproc.connect(realign,'mean_image',bet_mean,'in_file') 
 
 	bet_struct = pe.Node(interface=fsl.BET(), name="bet_struct")
-	bet_struct.inputs.mask = config.bet_mask
-	bet_struct.inputs.frac = config.bet_frac
-	bet_struct.inputs.robust = config.bet_robust
-	bet_struct.inputs.vertical_gradient = config.bet_vertical_gradient
+	bet_struct.inputs.mask = config.struct_bet_mask
+	bet_struct.inputs.frac = config.struct_bet_frac
+	bet_struct.inputs.robust = config.struct_bet_robust
+	bet_struct.inputs.vertical_gradient = config.struct_bet_vertical_gradient
 	preproc.connect(inputnode,'struct',bet_struct,'in_file')	
 
 	# flirt_mean2struct structural to mean functional 
@@ -321,10 +327,10 @@ def preprocess_mni(config,useFieldmap=True,name='preprocess'):
 
 	# skull strip mean structural image
 	bet_struct = pe.Node(interface=fsl.BET(), name="bet_struct")
-	bet_struct.inputs.mask = config.bet_mask
-	bet_struct.inputs.frac = config.bet_frac
-	bet_struct.inputs.robust = config.bet_robust
-	bet_struct.inputs.vertical_gradient = config.bet_vertical_gradient
+	bet_struct.inputs.mask = config.struct_bet_mask
+	bet_struct.inputs.frac = config.struct_bet_frac
+	bet_struct.inputs.robust = config.struct_bet_robust
+	bet_struct.inputs.vertical_gradient = config.struct_bet_vertical_gradient
 	preproc.connect(inputnode,'struct',bet_struct,'in_file')	
 
 
@@ -525,10 +531,10 @@ def preprocess_native(config,useFieldmap=True,name='preprocess_native'):
 
 	# skull strip mean functional image
 	bet_mean = pe.Node(interface=fsl.BET(), name="bet_mean")
-	bet_mean.inputs.mask = config.bet_mask
-	bet_mean.inputs.frac = config.bet_frac
-	bet_mean.inputs.robust = config.bet_robust
-	bet_mean.inputs.vertical_gradient = config.bet_vertical_gradient
+	bet_mean.inputs.mask = config.struct_bet_mask
+	bet_mean.inputs.frac = config.struct_bet_frac
+	bet_mean.inputs.robust = config.struct_bet_robust
+	bet_mean.inputs.vertical_gradient = config.struct_bet_vertical_gradient
 	preproc.connect(realign,'mean_image',bet_mean,'in_file') 
 
 	# skull strip mean structural image
