@@ -461,14 +461,20 @@ def preprocess_mni(config,useFieldmap=True,name='preprocess'):
 	bet_func.inputs.vertical_gradient = config.bet_vertical_gradient
 	preproc.connect(despike,'out_file',bet_func,'in_file')	
 
+	# apply mask to 4d image
+	apply_mask = pe.Node(interface=fsl.ApplyMask(), name="apply_mask")
+	preproc.connect(despike,'out_file',apply_mask,'in_file')	
+	preproc.connect(bet_func,'mask_file',apply_mask,'mask_file')
+
+
 	# calculated brighness threshold for susan (mean image intensity * 0.75)
 	image_mean = pe.Node(interface=fsl.ImageStats(),name='image_mean')	
 	image_mean.inputs.op_string = "-M"
-	preproc.connect(bet_func,'out_file',image_mean,'in_file')
+	preproc.connect(apply_mask,'out_file',image_mean,'in_file')
 
 	# scale image so that mean 1000/original
 	scale_image = pe.Node(interface=math.MathsCommand(),name='scale_image')
-	preproc.connect(bet_func,'out_file',scale_image,'in_file')
+	preproc.connect(apply_mask,'out_file',scale_image,'in_file')
 	preproc.connect(image_mean,('out_stat',create_scale_args, "-mul 1000 -div "),scale_image,'args')
 
 	# smooth image using SUSAN
@@ -480,7 +486,7 @@ def preprocess_mni(config,useFieldmap=True,name='preprocess'):
 	            
 	# gather output
 	outputnode = pe.Node(interface=util.IdentityInterface(fields=['func','ufunc','mask','movement','struct']),name='output')
-	preproc.connect(bet_func,'out_file',outputnode, 'ufunc')
+	preproc.connect(apply_mask,'out_file',outputnode, 'ufunc')
 	preproc.connect(susan,'smoothed_file',outputnode,'func')
 	preproc.connect(realign,'realignment_parameters',outputnode,'movement')
 	preproc.connect(norm_struct,'normalized_files',outputnode,'struct')
