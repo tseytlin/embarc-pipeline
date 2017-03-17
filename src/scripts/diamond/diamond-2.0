@@ -144,7 +144,9 @@ do
 	ls $DATA_DIR/output/*/ps/*.ps >& /dev/null
 	if [ $? -eq 0 ]; then	
 		echo "compiling analysis PDF .." 2>&1 | tee -a $LOG_FILE
-		(cd $DATA_DIR; psmerge -ot.ps output/*/ps/*.ps; ps2pdf t.ps ${USERNAME}_analysis.pdf; rm t.ps)  2>&1 | tee -a $LOG_FILE
+		#(cd $DATA_DIR; psmerge -ot.ps output/*/ps/*.ps; ps2pdf t.ps ${USERNAME}_analysis.pdf; rm t.ps)  2>&1 | tee -a $LOG_FILE
+		(cd $DATA_DIR/output; for x in `ls -d */ps`; do y=$(dirname $x); psmerge -ot.ps $x/*.ps; ps2pdf t.ps ${USERNAME}_$y.pdf; rm t.ps; done)  2>&1 | tee -a $LOG_FILE
+
 	fi
 
 	# create logs directory if not there
