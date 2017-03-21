@@ -15,10 +15,18 @@ conf = gold.Config()
 conf.CPU_CORES = 16
 conf.time_repetition  = 1.5
 		
+# func BET	
 conf.bet_mask = True
-conf.bet_frac = 0.5 #0.6
+conf.bet_frac = 0.6
 conf.bet_robust = True
-conf.bet_vertical_gradient = 0
+conf.bet_vertical_gradient = -0.05
+
+# struct BET
+conf.struct_bet_mask = True
+conf.struct_bet_frac = 0.5
+conf.struct_bet_robust = True
+conf.struct_bet_vertical_gradient = 0
+
 		
 conf.flirt_cost = 'mutualinfo'
 conf.flirt_bins = 256
