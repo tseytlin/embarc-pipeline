@@ -444,13 +444,6 @@ def preprocess_mni(config,useFieldmap=True,name='preprocess'):
 	preproc.connect(dartel_template,'outputspec.template_file',norm_struct,'template_file')
 	preproc.connect(dartel_template, 'outputspec.flow_fields', norm_struct, 'flowfield_files')
 	preproc.connect(bet_struct,'out_file',norm_struct,'apply_to_files')
-
-	
-	# remove spikes
-	despike = pe.Node(interface=afni.Despike(), name='despike')
-	despike.inputs.outputtype = 'NIFTI'
-	#TODO: need params 3 and 5?  Default 2 and 4
-	preproc.connect(norm_func,'normalized_files',despike,'in_file')
 	
 
 	# create a nice mask to output	
@@ -459,22 +452,28 @@ def preprocess_mni(config,useFieldmap=True,name='preprocess'):
 	bet_func.inputs.frac = config.bet_frac
 	bet_func.inputs.robust = config.bet_robust
 	bet_func.inputs.vertical_gradient = config.bet_vertical_gradient
-	preproc.connect(despike,'out_file',bet_func,'in_file')	
+	preproc.connect(norm_func,'normalized_files',bet_func,'in_file')	
 
 	# apply mask to 4d image
 	apply_mask = pe.Node(interface=fsl.ApplyMask(), name="apply_mask")
-	preproc.connect(despike,'out_file',apply_mask,'in_file')	
+	preproc.connect(norm_func,'normalized_files',apply_mask,'in_file')	
 	preproc.connect(bet_func,'mask_file',apply_mask,'mask_file')
+
+	# remove spikes
+	despike = pe.Node(interface=afni.Despike(), name='despike')
+	despike.inputs.outputtype = 'NIFTI'
+	#TODO: need params 3 and 5?  Default 2 and 4
+	preproc.connect(apply_mask,'out_file',despike,'in_file')
 
 
 	# calculated brighness threshold for susan (mean image intensity * 0.75)
 	image_mean = pe.Node(interface=fsl.ImageStats(),name='image_mean')	
 	image_mean.inputs.op_string = "-M"
-	preproc.connect(apply_mask,'out_file',image_mean,'in_file')
+	preproc.connect(despike,'out_file',image_mean,'in_file')
 
 	# scale image so that mean 1000/original
 	scale_image = pe.Node(interface=math.MathsCommand(),name='scale_image')
-	preproc.connect(apply_mask,'out_file',scale_image,'in_file')
+	preproc.connect(despike,'out_file',scale_image,'in_file')
 	preproc.connect(image_mean,('out_stat',create_scale_args, "-mul 1000 -div "),scale_image,'args')
 
 	# smooth image using SUSAN
@@ -486,7 +485,7 @@ def preprocess_mni(config,useFieldmap=True,name='preprocess'):
 	            
 	# gather output
 	outputnode = pe.Node(interface=util.IdentityInterface(fields=['func','ufunc','mask','movement','struct']),name='output')
-	preproc.connect(apply_mask,'out_file',outputnode, 'ufunc')
+	preproc.connect(despike,'out_file',outputnode, 'ufunc')
 	preproc.connect(susan,'smoothed_file',outputnode,'func')
 	preproc.connect(realign,'realignment_parameters',outputnode,'movement')
 	preproc.connect(norm_struct,'normalized_files',outputnode,'struct')
