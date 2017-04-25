@@ -272,7 +272,7 @@ def create_inversion_args(stats,prefix):
 	return prefix+str(stats[1])
 	
 def create_brightness_threshold(stats):
-	return float(stats)*.75
+	return float(stats)
 
 def create_scale_args(stats,prefix):
 	return prefix+str(float(stats))
@@ -466,22 +466,29 @@ def preprocess_mni(config,useFieldmap=True,name='preprocess'):
 	preproc.connect(apply_mask,'out_file',despike,'in_file')
 
 
-	# calculated brighness threshold for susan (mean image intensity * 0.75)
-	image_mean = pe.Node(interface=fsl.ImageStats(),name='image_mean')	
-	image_mean.inputs.op_string = "-M"
-	preproc.connect(despike,'out_file',image_mean,'in_file')
+	# merge inputs from bet for scaling the image
+	op_merge = pe.Node(interface=util.Merge(2),name='op_merge')
+	preproc.connect(despike,'out_file',op_merge,"in1")	
+	preproc.connect(bet_func,"mask_file",op_merge,"in2")
 
-	# scale image so that mean 1000/original
-	scale_image = pe.Node(interface=math.MathsCommand(),name='scale_image')
+	# scale image: 4D - 3D (mean image) + 1000 (within the mask)
+	scale_image = pe.Node(interface=math.MultiImageMaths(),name='scale_image')
+	scale_image.inputs.op_string = "-Tmean -mul -1 -add %s -add 1000 -mas %s"
 	preproc.connect(despike,'out_file',scale_image,'in_file')
-	preproc.connect(image_mean,('out_stat',create_scale_args, "-mul 1000 -div "),scale_image,'args')
+	preproc.connect(op_merge,"out",scale_image,'operand_files')
+	
+	# calculated brighness threshold for susan (mean image intensity * 0.75)
+	image_sd = pe.Node(interface=fsl.ImageStats(),name='image_sd')	
+	image_sd.inputs.op_string = "-S"
+	preproc.connect(scale_image,'out_file',image_sd,'in_file')
+
 
 	# smooth image using SUSAN
 	susan = pe.Node(interface=fsl.SUSAN(), name="smooth")
 	susan.inputs.brightness_threshold = config.susan_brightness_threshold 
 	susan.inputs.fwhm = config.susan_fwhm
 	preproc.connect(scale_image,'out_file',susan,'in_file') 
-	preproc.connect(image_mean,('out_stat',create_brightness_threshold),susan,'brightness_threshold') 
+	preproc.connect(image_sd,('out_stat',create_brightness_threshold),susan,'brightness_threshold') 
 	            
 	# gather output
 	outputnode = pe.Node(interface=util.IdentityInterface(fields=['func','ufunc','mask','movement','struct']),name='output')
