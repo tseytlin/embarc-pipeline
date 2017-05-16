@@ -81,7 +81,8 @@ function reward_eprime2dm(eprime_file)
 	NeutralShuffleImage_OnsetTime   = find(ismember(head3{1}, 'NeutralShuffleImage.OnsetTime')==1);    %40 
 	
 	%
-
+    GotResp = find(ismember(head3{1}, 'GotRespDuration')==1);
+    
     	first_scan = str2num(char(content3{1,1}(GamStim_OnsetTime)));
 
 
@@ -97,8 +98,18 @@ function reward_eprime2dm(eprime_file)
 	        error_trial_onset(error_trial) = str2num(char(content3{ii}(GamStim_OnsetTime)))  - first_scan;
 
 	    %change the error length    
-	    end
+        end
 	    
+        if (isempty(str2num(char(content3{ii}(GotResp)))) == 1) && (flag == 0)
+            flag = 1;
+	        error_trial = error_trial +1;
+	        error_trial_onset(error_trial) = str2num(char(content3{ii}(GamStim_OnsetTime)))  - first_scan;
+            
+        end
+        
+        
+        if flag == 0;
+        
 	    if str2num(char(content3{ii,1}(GamStim_RESP))) == GamStim_RESP_c1
 	        resp1 = resp1 + 1;
 	        response_onset(resp1) = str2num(char(content3{ii}(GamStim_OnsetTime))) - first_scan;
@@ -113,7 +124,7 @@ function reward_eprime2dm(eprime_file)
 	    end
 	    
 	    
-	    if flag == 0;
+	    
 	        if (strcmp(content3{ii}(Procedure), 'RewardWinTrialProc') == 1) 
 	            
               
@@ -231,7 +242,7 @@ function reward_eprime2dm(eprime_file)
                 
                 range(resp1) = 1.75;
                 re_array(resp1) = 0.125;
-                pe_array(resp1) = -0.625;
+                pe_array(resp1) = -0.875;
                 
             end
             
