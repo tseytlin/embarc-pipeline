@@ -51,9 +51,12 @@ conf.dartel_voxel_size =  (2, 2, 2)
 conf.susan_brightness_threshold = 750 #200.0
 conf.susan_fwhm = 6
 
-conf.filter_image_bptf = ' -bptf 37 4.167'  #hard coded filters, but dependent on TR
-	
-
+# resting low/high band pass filter parameters
+# sigma = ((1/hz)/2.35)/TR
+# hz (low) =  0.008 
+# hz (high) =  0.08 
+# 2.35 - gaussian constant
+conf.filter_image_bptf = ' -bptf 35.461 3.546'
 
 conf.modelspec_concatenate_runs   = False
 conf.modelspec_high_pass_filter_cutoff = 60 # reward only
@@ -1062,7 +1065,7 @@ if __name__ == "__main__":
 	for arg in sys.argv:
 		 if arg in opts:
 		 	opt_list.append(arg)
-	directory = sys.argv[len(sys.argv)-1]
+	directory = sys.argv[len(sys.argv)-1]+"/"
 	
 	# check directory
 	if not os.path.exists(directory) and directory != "preprocess":

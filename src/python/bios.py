@@ -12,8 +12,13 @@ conf = gold.Config()
 conf.time_repetition  = 2.0
 conf.CPU_CORES = 20
 conf.fugue_dwell_time = 0.00025	
-conf.filter_image_bptf = ' -bptf 50 1.4'	
 
+# resting low/high band pass filter parameters
+# sigma = ((1/hz)/2.35)/TR
+# hz (low) =  0.008 
+# hz (high) =  0.08 
+# 2.35 - gaussian constant
+conf.filter_image_bptf = ' -bptf 26.596 2.66'
 
 conf.bet_mask = True
 conf.bet_frac = 0.5 #0.6
@@ -544,7 +549,7 @@ if __name__ == "__main__":
 	for arg in sys.argv:
 		 if arg in opts:
 		 	opt_list.append(arg)
-	directory = sys.argv[len(sys.argv)-1]
+	directory = sys.argv[len(sys.argv)-1]+"/"
 	
 	# check directory
 	if not os.path.exists(directory):
