@@ -1046,8 +1046,8 @@ def asl(directory,sequence):
 
 	# smooth image using SUSAN
 	susan = pe.Node(interface=fsl.SUSAN(), name="smooth")
-	susan.inputs.brightness_threshold = config.susan_brightness_threshold 
-	susan.inputs.fwhm = config.susan_fwhm
+	susan.inputs.brightness_threshold = conf.susan_brightness_threshold 
+	susan.inputs.fwhm = conf.susan_fwhm
 	preproc.connect(scale_image,'out_file',susan,'in_file') 
 	preproc.connect(image_sd,('out_stat',gold.create_brightness_threshold),susan,'brightness_threshold') 
 	            
