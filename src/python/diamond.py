@@ -1030,7 +1030,7 @@ def asl(directory,sequence):
 	# merge inputs from bet for scaling the image
 	op_merge = pe.Node(interface=util.Merge(2),name='op_merge')
 	preproc.connect(bet_cbf,'out_file',op_merge,"in1")	
-	preproc.connect(bet_func,"mask_file",op_merge,"in2")
+	preproc.connect(bet_cbf,"mask_file",op_merge,"in2")
 
 	# scale image: 4D - 3D (mean image) + 1000 (within the mask)
 	scale_image = pe.Node(interface=math.MultiImageMaths(),name='scale_image')
