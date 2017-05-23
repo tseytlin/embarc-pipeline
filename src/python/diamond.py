@@ -1049,7 +1049,7 @@ def asl(directory,sequence):
 	susan.inputs.brightness_threshold = config.susan_brightness_threshold 
 	susan.inputs.fwhm = config.susan_fwhm
 	preproc.connect(scale_image,'out_file',susan,'in_file') 
-	preproc.connect(image_sd,('out_stat',create_brightness_threshold),susan,'brightness_threshold') 
+	preproc.connect(image_sd,('out_stat',gold.create_brightness_threshold),susan,'brightness_threshold') 
 	            
 
 
