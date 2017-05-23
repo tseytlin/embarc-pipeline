@@ -1013,35 +1013,10 @@ def asl(directory,sequence):
 	bet_cbf.inputs.vertical_gradient = conf.bet_vertical_gradient
 	preproc.connect(norm_func,'normalized_files',bet_cbf,'in_file')	
 
-		
-	# calculated brighness threshold for susan (mean image intensity * 0.75)
-	#image_mean = pe.Node(interface=fsl.ImageStats(),name='image_mean')	
-	#image_mean.inputs.op_string = "-M"
-	#preproc.connect(bet_cbf,'out_file',image_mean,'in_file')
-
-
-	# smooth image using SUSAN
-	#susan = pe.Node(interface=fsl.SUSAN(), name="smooth")
-	#susan.inputs.fwhm = conf.susan_fwhm
-	#preproc.connect(norm_func,'normalized_files',susan,'in_file') 
-	#preproc.connect(image_mean,('out_stat',gold.create_brightness_threshold),susan,'brightness_threshold') 
-	
-
-	# merge inputs from bet for scaling the image
-	#op_merge = pe.Node(interface=util.Merge(2),name='op_merge')
-	#preproc.connect(bet_cbf,'out_file',op_merge,"in1")	
-	#preproc.connect(bet_cbf,"mask_file",op_merge,"in2")
-
-	# scale image: 4D - 3D (mean image) + 1000 (within the mask)
-	#scale_image = pe.Node(interface=math.MultiImageMaths(),name='scale_image')
-	#scale_image.inputs.op_string = "-Tmean -mul -1 -add %s -add 1000 -mas %s"
-	#preproc.connect(bet_cbf,'out_file',scale_image,'in_file')
-	#preproc.connect(op_merge,"out",scale_image,'operand_files')
 	
 	# calculated brighness threshold for susan (mean image intensity * 0.75)
 	image_sd = pe.Node(interface=fsl.ImageStats(),name='image_sd')	
 	image_sd.inputs.op_string = "-S"
-	#preproc.connect(scale_image,'out_file',image_sd,'in_file')
 	preproc.connect(bet_cbf,'out_file',image_sd,'in_file')
 
 
@@ -1049,7 +1024,6 @@ def asl(directory,sequence):
 	susan = pe.Node(interface=fsl.SUSAN(), name="smooth")
 	susan.inputs.brightness_threshold = conf.susan_brightness_threshold 
 	susan.inputs.fwhm = conf.susan_fwhm
-	#preproc.connect(scale_image,'out_file',susan,'in_file') 
 	preproc.connect(bet_cbf,'out_file',susan,'in_file') 
 	preproc.connect(image_sd,('out_stat',gold.create_brightness_threshold),susan,'brightness_threshold') 
 	            
